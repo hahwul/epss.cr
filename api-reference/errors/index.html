@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EPSS::Error and its subclasses">
+  <title>Errors - epss.cr</title>
+  <meta property="og:title" content="Errors">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://epss.cr.hahwul.com/api-reference/errors/">
+  <meta property="og:description" content="EPSS::Error and its subclasses">
+  <meta property="og:image" content="https://epss.cr.hahwul.com/og-images/api-reference-errors.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Errors">
+  <meta name="twitter:description" content="EPSS::Error and its subclasses">
+  <meta name="twitter:image" content="https://epss.cr.hahwul.com/og-images/api-reference-errors.svg">
+  <link rel="stylesheet" href="https://epss.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+  <meta name="apple-mobile-web-app-title" content="epss.cr" />
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://epss.cr.hahwul.com/" class="logo">epss.cr <span>Documentation</span></a>
+  <nav>
+    <a href="https://epss.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://epss.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <a href="https://github.com/hahwul/epss.cr">GitHub</a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <a href="https://epss.cr.hahwul.com/" class="sidebar-logo">
+      <strong>epss.cr</strong>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/api-client/">API Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/csv-feed/">CSV Feed</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/time-series/">Time-series</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/json-and-bands/">JSON &amp; Bands</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/api-reference/score/">Score</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/band/">Band</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/client/">Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/query/">Query</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/response/">Response</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/csv/">CSV</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Errors</h1>
+    <p>All errors raised by epss.cr descend from <code>EPSS::Error</code>. Catch the base
+class to handle any failure without coupling to specific subclasses.</p>
+<pre><code class="language-crystal hljs">class EPSS::Error &lt; Exception; end
+class EPSS::ParseError &lt; EPSS::Error; end
+class EPSS::APIError   &lt; EPSS::Error
+  getter status : Int32?
+  getter body   : String?
+end
+</code></pre>
+<h2 id="epssparseerror"><code>EPSS::ParseError</code></h2>
+<p>Raised for malformed structural input — a constructor argument out of
+range, a JSON payload missing a required field, a CSV row with the
+wrong column count, an unparseable date string. The message includes
+the offending value when feasible.</p>
+<p>Typical sources:</p>
+<ul>
+<li><code>EPSS::Score.new</code> with <code>epss</code> outside <code>[0.0, 1.0]</code></li>
+<li><code>EPSS::Query.new</code> with <code>offset</code> &lt; 0 or <code>limit</code> &lt;= 0</li>
+<li><code>EPSS.from_json</code> with a payload that has neither a <code>data</code> envelope nor
+a <code>cve</code> key</li>
+<li><code>EPSS::CSV.parse</code> with a header missing one of <code>cve</code> / <code>epss</code> /
+<code>percentile</code></li>
+</ul>
+<h2 id="epssapierror"><code>EPSS::APIError</code></h2>
+<p>Raised when the FIRST EPSS API responds with a non-2xx status, or when
+the JSON envelope reports <code>status</code> != <code>&quot;OK&quot;</code>. Carries:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>#message</code></td>
+<td>Human-readable summary</td>
+</tr>
+<tr>
+<td><code>#status</code></td>
+<td>HTTP status code (<code>Int32?</code>)</td>
+</tr>
+<tr>
+<td><code>#body</code></td>
+<td>Raw response body when available (<code>String?</code>)</td>
+</tr>
+<tr>
+<td><code>#cause</code></td>
+<td>Original transport exception when retries were exhausted on <code>IO::Error</code> / <code>Socket::Error</code> / <code>OpenSSL::SSL::Error</code></td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-crystal hljs">begin
+  client.fetch(query)
+rescue ex : EPSS::APIError
+  log.warn &quot;EPSS API failed: #{ex.status} #{ex.message}&quot;
+  log.warn ex.body
+  raise unless ex.status.try(&amp;.in?(500..599))  # retry only on 5xx
+end
+</code></pre>
+<h2 id="non-raising-variants">Non-raising variants</h2>
+<p>For input validation paths where errors are expected, use the
+non-raising helpers instead of <code>rescue</code>:</p>
+<pre><code class="language-crystal hljs">EPSS.from_json?(payload)   # =&gt; Array(Score)? — nil on any error
+</code></pre>
+<p><code>EPSS.from_json</code> (and <code>EPSS::Score.from_row</code>) still raise on malformed
+input — use <code>from_json?</code> only when the caller treats malformed input as
+&quot;skip this record&quot; rather than &quot;halt&quot;.</p>
+
+    <div class="docs-footer">
+      <p>epss.cr — A Crystal implementation of the Exploit Prediction Scoring System.</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+<script src="https://epss.cr.hahwul.com/js/search.js"></script>
+</body>
+</html>

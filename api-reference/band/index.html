@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EPSS::Band — qualitative classification">
+  <title>Band - epss.cr</title>
+  <meta property="og:title" content="Band">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://epss.cr.hahwul.com/api-reference/band/">
+  <meta property="og:description" content="EPSS::Band — qualitative classification">
+  <meta property="og:image" content="https://epss.cr.hahwul.com/og-images/api-reference-band.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Band">
+  <meta name="twitter:description" content="EPSS::Band — qualitative classification">
+  <meta name="twitter:image" content="https://epss.cr.hahwul.com/og-images/api-reference-band.svg">
+  <link rel="stylesheet" href="https://epss.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+  <meta name="apple-mobile-web-app-title" content="epss.cr" />
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://epss.cr.hahwul.com/" class="logo">epss.cr <span>Documentation</span></a>
+  <nav>
+    <a href="https://epss.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://epss.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <a href="https://github.com/hahwul/epss.cr">GitHub</a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <a href="https://epss.cr.hahwul.com/" class="sidebar-logo">
+      <strong>epss.cr</strong>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/api-client/">API Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/csv-feed/">CSV Feed</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/time-series/">Time-series</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/json-and-bands/">JSON &amp; Bands</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/api-reference/score/">Score</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/band/">Band</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/client/">Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/query/">Query</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/response/">Response</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/csv/">CSV</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Band</h1>
+    <p><code>EPSS::Band</code> buckets an EPSS measurement into one of five severity-like
+labels:</p>
+<pre><code class="language-crystal hljs">enum EPSS::Band
+  None
+  Low
+  Medium
+  High
+  Critical
+end
+</code></pre>
+<p>EPSS itself ships only numeric values; the band cutoffs in epss.cr are
+operational conventions. Pick whichever set fits the policy you're
+enforcing.</p>
+<h2 id="cutoffs">Cutoffs</h2>
+<table>
+<thead>
+<tr>
+<th>Band</th>
+<th>EPSS probability</th>
+<th>Percentile rank</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>None</td>
+<td><code>&lt; 0.01</code></td>
+<td><code>&lt; 0.50</code></td>
+</tr>
+<tr>
+<td>Low</td>
+<td><code>[0.01, 0.10)</code></td>
+<td><code>[0.50, 0.80)</code></td>
+</tr>
+<tr>
+<td>Medium</td>
+<td><code>[0.10, 0.30)</code></td>
+<td><code>[0.80, 0.90)</code></td>
+</tr>
+<tr>
+<td>High</td>
+<td><code>[0.30, 0.70)</code></td>
+<td><code>[0.90, 0.99)</code></td>
+</tr>
+<tr>
+<td>Critical</td>
+<td><code>&gt;= 0.70</code></td>
+<td><code>&gt;= 0.99</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="class-methods">Class methods</h2>
+<h3 id="bandfrom-epssprobability-float64-band"><code>Band.from_epss(probability : Float64) : Band</code></h3>
+<p>Bucket by the raw EPSS probability.</p>
+<pre><code class="language-crystal hljs">EPSS::Band.from_epss(0.005)  # =&gt; EPSS::Band::None
+EPSS::Band.from_epss(0.92)   # =&gt; EPSS::Band::Critical
+</code></pre>
+<p>Out-of-range input (<code>&lt; 0.0</code> or <code>&gt; 1.0</code>) raises <code>EPSS::ParseError</code>.</p>
+<h3 id="bandfrom-percentilerank-float64-band"><code>Band.from_percentile(rank : Float64) : Band</code></h3>
+<p>Bucket by the percentile rank.</p>
+<pre><code class="language-crystal hljs">EPSS::Band.from_percentile(0.30)  # =&gt; EPSS::Band::None
+EPSS::Band.from_percentile(0.95)  # =&gt; EPSS::Band::High
+</code></pre>
+<h2 id="ordering">Ordering</h2>
+<p><code>Band</code> is <code>Comparable</code> in the natural order:</p>
+<pre><code class="language-crystal hljs">EPSS::Band::Critical &gt; EPSS::Band::High  # =&gt; true
+EPSS::Band::Low      &lt; EPSS::Band::High  # =&gt; true
+</code></pre>
+<p>This is useful for threshold filters:</p>
+<pre><code class="language-crystal hljs">scores.select { |s| s.band &gt;= EPSS::Band::High }
+</code></pre>
+<h2 id="shortcut-on-score">Shortcut on Score</h2>
+<p><code>EPSS::Score</code> exposes both bands directly:</p>
+<pre><code class="language-crystal hljs">score.band             # uses #from_epss
+score.percentile_band  # uses #from_percentile
+</code></pre>
+
+    <div class="docs-footer">
+      <p>epss.cr — A Crystal implementation of the Exploit Prediction Scoring System.</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+<script src="https://epss.cr.hahwul.com/js/search.js"></script>
+</body>
+</html>

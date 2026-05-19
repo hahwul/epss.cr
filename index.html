@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A Crystal implementation of the Exploit Prediction Scoring System (EPSS)">
+  <title>epss.cr - epss.cr</title>
+  <meta property="og:title" content="epss.cr">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://epss.cr.hahwul.com/">
+  <meta property="og:description" content="A Crystal implementation of the Exploit Prediction Scoring System (EPSS)">
+  <meta property="og:image" content="https://epss.cr.hahwul.com/og-images/epsscr.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="epss.cr">
+  <meta name="twitter:description" content="A Crystal implementation of the Exploit Prediction Scoring System (EPSS)">
+  <meta name="twitter:image" content="https://epss.cr.hahwul.com/og-images/epsscr.svg">
+  <link rel="stylesheet" href="https://epss.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+  <meta name="apple-mobile-web-app-title" content="epss.cr" />
+</head>
+<body data-section="">
+<header class="docs-header">
+  <a href="https://epss.cr.hahwul.com/" class="logo">epss.cr <span>Documentation</span></a>
+  <nav>
+    <a href="https://epss.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://epss.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <a href="https://github.com/hahwul/epss.cr">GitHub</a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <a href="https://epss.cr.hahwul.com/" class="sidebar-logo">
+      <strong>epss.cr</strong>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/api-client/">API Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/csv-feed/">CSV Feed</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/time-series/">Time-series</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/json-and-bands/">JSON &amp; Bands</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/api-reference/score/">Score</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/band/">Band</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/client/">Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/query/">Query</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/response/">Response</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/csv/">CSV</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>epss.cr</h1>
+    <p>A Crystal library for the <a href="https://www.first.org/epss/">Exploit Prediction Scoring System
+(EPSS)</a> published by FIRST.</p>
+<p><code>epss.cr</code> covers the two surfaces EPSS is consumed through in practice:</p>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Source</th>
+<th>Module</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>REST API</td>
+<td><code>https://api.first.org/data/v1/epss</code></td>
+<td><code>EPSS::Client</code></td>
+</tr>
+<tr>
+<td>Daily CSV feed</td>
+<td><code>https://epss.cyentia.com/epss_scores-YYYY-MM-DD.csv.gz</code></td>
+<td><code>EPSS::CSV</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="quick-links">Quick Links</h2>
+<ul>
+<li><strong><a href="/user-guide/getting-started/">Getting Started</a></strong> — installation and first call</li>
+<li><strong><a href="/user-guide/api-client/">API Client</a></strong> — REST API, filters, retries, pagination</li>
+<li><strong><a href="/user-guide/csv-feed/">CSV Feed</a></strong> — daily-feed parser with gzip auto-detect</li>
+<li><strong><a href="/user-guide/time-series/">Time-series</a></strong> — 30-day history per CVE</li>
+<li><strong><a href="/user-guide/json-and-bands/">JSON &amp; Bands</a></strong> — round-trip and qualitative classification</li>
+<li><strong><a href="/api-reference/score/">API Reference</a></strong> — all types and methods</li>
+</ul>
+<h2 id="highlights">Highlights</h2>
+<ul>
+<li>Auto-detecting top-level helpers: <code>EPSS.score(cve)</code>, <code>EPSS.scores(cves)</code>.</li>
+<li>Strict spec-conformant parsing: handles the FIRST API envelope, time-series
+expansion, and the <code>#</code>-prefixed daily-feed metadata header.</li>
+<li><code>Comparable(Score)</code> — sort and threshold by EPSS probability.</li>
+<li>Structural equality + <code>hash</code> — Scores work as <code>Set</code> / <code>Hash</code> keys
+(CVE + date + values).</li>
+<li>JSON round-trip in the FIRST API row shape.</li>
+<li><code>EPSS::Band</code> qualitative bucket (None/Low/Medium/High/Critical) for both
+raw probability and percentile rank.</li>
+<li>Retry-After-aware retries with exponential backoff and SSL/IO/timeout
+rescue.</li>
+<li>Pluggable <code>EPSS::Transport</code> for offline / test-stubbed clients.</li>
+</ul>
+<h2 id="installation">Installation</h2>
+<p>Add the dependency to your <code>shard.yml</code>:</p>
+<pre><code class="language-yaml hljs">dependencies:
+  epss:
+    github: hahwul/epss.cr
+</code></pre>
+<p>Then run:</p>
+<pre><code class="language-bash hljs">shards install
+</code></pre>
+<h2 id="quick-example">Quick Example</h2>
+<pre><code class="language-crystal hljs">require &quot;epss&quot;
+
+if score = EPSS.score(&quot;CVE-2022-27225&quot;)
+  puts &quot;EPSS=#{score.epss}&quot;
+  puts &quot;Percentile=#{score.percentile}&quot;
+  puts &quot;Band=#{score.band}&quot;
+end
+</code></pre>
+
+    <div class="docs-footer">
+      <p>epss.cr — A Crystal implementation of the Exploit Prediction Scoring System.</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+<script src="https://epss.cr.hahwul.com/js/search.js"></script>
+</body>
+</html>

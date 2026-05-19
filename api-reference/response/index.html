@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EPSS::Response — decoded envelope from one API call">
+  <title>Response - epss.cr</title>
+  <meta property="og:title" content="Response">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://epss.cr.hahwul.com/api-reference/response/">
+  <meta property="og:description" content="EPSS::Response — decoded envelope from one API call">
+  <meta property="og:image" content="https://epss.cr.hahwul.com/og-images/api-reference-response.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Response">
+  <meta name="twitter:description" content="EPSS::Response — decoded envelope from one API call">
+  <meta name="twitter:image" content="https://epss.cr.hahwul.com/og-images/api-reference-response.svg">
+  <link rel="stylesheet" href="https://epss.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+  <meta name="apple-mobile-web-app-title" content="epss.cr" />
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://epss.cr.hahwul.com/" class="logo">epss.cr <span>Documentation</span></a>
+  <nav>
+    <a href="https://epss.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://epss.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <a href="https://github.com/hahwul/epss.cr">GitHub</a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <a href="https://epss.cr.hahwul.com/" class="sidebar-logo">
+      <strong>epss.cr</strong>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/api-client/">API Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/csv-feed/">CSV Feed</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/time-series/">Time-series</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/json-and-bands/">JSON &amp; Bands</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/api-reference/score/">Score</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/band/">Band</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/client/">Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/query/">Query</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/response/">Response</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/csv/">CSV</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Response</h1>
+    <p><code>EPSS::Response</code> is what <code>EPSS::Client#fetch</code> returns. It carries the
+FIRST API envelope's metadata along with the flattened
+<code>Array(EPSS::Score)</code>.</p>
+<h2 id="fields">Fields</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>#status</code></td>
+<td><code>String</code></td>
+<td>envelope <code>status</code> (e.g. <code>&quot;OK&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>#status_code</code></td>
+<td><code>Int32</code></td>
+<td>envelope <code>status-code</code> (e.g. <code>200</code>)</td>
+</tr>
+<tr>
+<td><code>#version</code></td>
+<td><code>String</code></td>
+<td>envelope <code>version</code></td>
+</tr>
+<tr>
+<td><code>#access</code></td>
+<td><code>String</code></td>
+<td>envelope <code>access</code></td>
+</tr>
+<tr>
+<td><code>#total</code></td>
+<td><code>Int32</code></td>
+<td>total rows matching the query</td>
+</tr>
+<tr>
+<td><code>#offset</code></td>
+<td><code>Int32</code></td>
+<td>server-reported start offset</td>
+</tr>
+<tr>
+<td><code>#limit</code></td>
+<td><code>Int32</code></td>
+<td>server-reported page size</td>
+</tr>
+<tr>
+<td><code>#scores</code></td>
+<td><code>Array(EPSS::Score)</code></td>
+<td>flattened score list</td>
+</tr>
+<tr>
+<td><code>#row_count</code></td>
+<td><code>Int32</code></td>
+<td>server <code>data.size</code> <em>before</em> flattening</td>
+</tr>
+</tbody>
+</table>
+<h2 id="predicates">Predicates</h2>
+<h3 id="ok-bool"><code>#ok? : Bool</code></h3>
+<p><code>status == &quot;OK&quot;</code> and <code>status_code == 200</code>. Used internally and useful
+for double-checking when callers wrap their own response handling.</p>
+<h3 id="more-bool"><code>#more? : Bool</code></h3>
+<p><code>offset + row_count &lt; total</code>. Drives <code>Client#each_score</code> pagination.
+Compares against <code>row_count</code> (not <code>scores.size</code>) so it stays correct
+when <code>scope=time-series</code> inflates each row into ~30 daily entries.</p>
+<h2 id="enumerable">Enumerable</h2>
+<p><code>Response</code> includes <code>Enumerable(Score)</code>, so iteration works directly:</p>
+<pre><code class="language-crystal hljs">resp = client.fetch(query)
+resp.each { |score| publish(score) }
+resp.select { |s| s.epss &gt; 0.5 }
+</code></pre>
+<h2 id="parsing">Parsing</h2>
+<h3 id="responsefrom-jsoninput-string-io-response"><code>Response.from_json(input : String | IO) : Response</code></h3>
+<p>Decode a FIRST EPSS JSON payload. Raises:</p>
+<ul>
+<li><code>EPSS::APIError</code> if the envelope reports an error
+(<code>status != &quot;OK&quot;</code> or <code>status-code != 200</code>);</li>
+<li><code>EPSS::ParseError</code> if the JSON is missing required fields or has the
+wrong shape.</li>
+</ul>
+<p>The <code>time-series</code> array nested inside each data row (when
+<code>scope=time-series</code>) is expanded into additional <code>Score</code>s in the
+returned <code>scores</code> list — each with the parent's <code>cve</code> copied over.</p>
+
+    <div class="docs-footer">
+      <p>epss.cr — A Crystal implementation of the Exploit Prediction Scoring System.</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+<script src="https://epss.cr.hahwul.com/js/search.js"></script>
+</body>
+</html>

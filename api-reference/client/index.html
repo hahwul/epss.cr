@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EPSS::Client — REST API client for the FIRST EPSS endpoint">
+  <title>Client - epss.cr</title>
+  <meta property="og:title" content="Client">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://epss.cr.hahwul.com/api-reference/client/">
+  <meta property="og:description" content="EPSS::Client — REST API client for the FIRST EPSS endpoint">
+  <meta property="og:image" content="https://epss.cr.hahwul.com/og-images/api-reference-client.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Client">
+  <meta name="twitter:description" content="EPSS::Client — REST API client for the FIRST EPSS endpoint">
+  <meta name="twitter:image" content="https://epss.cr.hahwul.com/og-images/api-reference-client.svg">
+  <link rel="stylesheet" href="https://epss.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+  <meta name="apple-mobile-web-app-title" content="epss.cr" />
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://epss.cr.hahwul.com/" class="logo">epss.cr <span>Documentation</span></a>
+  <nav>
+    <a href="https://epss.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://epss.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <a href="https://github.com/hahwul/epss.cr">GitHub</a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <a href="https://epss.cr.hahwul.com/" class="sidebar-logo">
+      <strong>epss.cr</strong>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/api-client/">API Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/csv-feed/">CSV Feed</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/time-series/">Time-series</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/json-and-bands/">JSON &amp; Bands</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/api-reference/score/">Score</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/band/">Band</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/client/">Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/query/">Query</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/response/">Response</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/csv/">CSV</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Client</h1>
+    <p><code>EPSS::Client</code> is the typed wrapper around
+<code>https://api.first.org/data/v1/epss</code>. HTTP is fully delegated to an
+injectable <code>EPSS::Transport</code>, so tests can swap in a stub without
+touching the network.</p>
+<h2 id="constructor">Constructor</h2>
+<pre><code class="language-crystal hljs">EPSS::Client.new(
+  base_uri:      URI = DEFAULT_BASE_URI,
+  user_agent:    String = &quot;epss.cr/0.1.0 (+https://github.com/hahwul/epss.cr)&quot;,
+  max_retries:   Int32 = 3,
+  retry_backoff: Time::Span = 500.milliseconds,
+  transport:     EPSS::Transport = EPSS::HTTPTransport.new,
+)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base_uri</code></td>
+<td>FIRST endpoint</td>
+<td>Override for proxies / mirrors</td>
+</tr>
+<tr>
+<td><code>user_agent</code></td>
+<td><code>epss.cr/&lt;VERSION&gt;</code></td>
+<td>Sent on every request</td>
+</tr>
+<tr>
+<td><code>max_retries</code></td>
+<td><code>3</code></td>
+<td>0 disables retries entirely</td>
+</tr>
+<tr>
+<td><code>retry_backoff</code></td>
+<td><code>500ms</code></td>
+<td>Exponential base; doubled each attempt</td>
+</tr>
+<tr>
+<td><code>transport</code></td>
+<td><code>HTTPTransport</code></td>
+<td>Swap for tests or caching layers</td>
+</tr>
+</tbody>
+</table>
+<h2 id="instance-methods">Instance methods</h2>
+<h3 id="fetchquery-query-querynew-epssresponse"><code>#fetch(query : Query = Query.new) : EPSS::Response</code></h3>
+<p>Issue one request. Does not iterate pages — see <code>#each_score</code>.</p>
+<h3 id="scorecve-string-date-time-nil-epssscore"><code>#score(cve : String, *, date : Time? = nil) : EPSS::Score?</code></h3>
+<p>Convenience for the single-CVE case. Returns <code>nil</code> when FIRST has no
+published score.</p>
+<h3 id="scorescves-enumerablestring-date-time-nil-batch-size-int32-100-arrayscore"><code>#scores(cves : Enumerable(String), *, date : Time? = nil, batch_size : Int32 = 100) : Array(Score)</code></h3>
+<p>Batch lookup across many CVEs. The list is chunked into requests of
+<code>batch_size</code> CVEs each.</p>
+<h3 id="time-seriescve-string-arrayscore"><code>#time_series(cve : String) : Array(Score)</code></h3>
+<p>Fetch the 30-day history for one CVE. Returns the flattened daily series
+sorted oldest-first.</p>
+<h3 id="each-scorequery-page-size-int32-1000-amp-score-gt-nil"><code>#each_score(query, *, page_size : Int32 = 1000, &amp; : Score -&gt;) : Nil</code></h3>
+<p>Iterate every score matching <code>query</code>, fetching subsequent pages
+transparently. The loop advances by the <strong>server-reported</strong> <code>row_count</code>
+on <code>EPSS::Response</code>, so it remains correct when <code>scope=time-series</code>
+expands each row.</p>
+<h3 id="all-scoresquery-page-size-int32-1000-arrayscore"><code>#all_scores(query, *, page_size : Int32 = 1000) : Array(Score)</code></h3>
+<p>Convenience around <code>#each_score</code> that materializes every page into a
+single Array. Be aware that an unfiltered query can be hundreds of
+thousands of rows.</p>
+<h3 id="build-uriquery-query-uri"><code>#build_uri(query : Query) : URI</code></h3>
+<p>Compose the absolute URI for a query. Useful for cache keys and logging.</p>
+<h2 id="retries">Retries</h2>
+<p>Status codes <code>429</code>, <code>500</code>, <code>502</code>, <code>503</code>, <code>504</code> are retried up to
+<code>max_retries</code> times. If the response includes a <code>Retry-After</code> header
+(seconds or HTTP-date form), the client honors it — capped at 60 seconds
+to prevent unbounded waits.</p>
+<p>The transport rescue covers <code>IO::Error</code> (which includes
+<code>IO::TimeoutError</code>), <code>Socket::Error</code>, and <code>OpenSSL::SSL::Error</code>. When
+retries are exhausted on a transport failure, the original exception is
+chained through <code>EPSS::APIError#cause</code>.</p>
+<p>Non-retryable status codes raise <code>EPSS::APIError</code> immediately with the
+status and body attached.</p>
+<h2 id="transport-seam">Transport seam</h2>
+<pre><code class="language-crystal hljs">abstract class EPSS::Transport
+  abstract def get(uri : URI, headers : HTTP::Headers) : HTTP::Client::Response
+end
+</code></pre>
+<p>The default <code>HTTPTransport</code> opens a fresh <code>HTTP::Client</code> per request:</p>
+<pre><code class="language-crystal hljs">EPSS::HTTPTransport.new(
+  connect_timeout: 10.seconds,
+  read_timeout:    30.seconds,
+)
+</code></pre>
+<p>For tests, see the <code>StubTransport</code> pattern in
+<a href="https://github.com/hahwul/epss.cr/blob/main/spec/spec_helper.cr"><code>spec/spec_helper.cr</code></a>.</p>
+<h2 id="default-client">Default client</h2>
+<pre><code class="language-crystal hljs">EPSS.client          # lazily-constructed default
+EPSS.client = ...    # override
+EPSS.reset_client    # clear the cache
+</code></pre>
+<p>Construction is mutex-protected so two fibers racing the first call
+won't build two <code>Client</code>s.</p>
+
+    <div class="docs-footer">
+      <p>epss.cr — A Crystal implementation of the Exploit Prediction Scoring System.</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+<script src="https://epss.cr.hahwul.com/js/search.js"></script>
+</body>
+</html>

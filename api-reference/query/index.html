@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EPSS::Query — typed query builder for the FIRST API">
+  <title>Query - epss.cr</title>
+  <meta property="og:title" content="Query">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://epss.cr.hahwul.com/api-reference/query/">
+  <meta property="og:description" content="EPSS::Query — typed query builder for the FIRST API">
+  <meta property="og:image" content="https://epss.cr.hahwul.com/og-images/api-reference-query.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Query">
+  <meta name="twitter:description" content="EPSS::Query — typed query builder for the FIRST API">
+  <meta name="twitter:image" content="https://epss.cr.hahwul.com/og-images/api-reference-query.svg">
+  <link rel="stylesheet" href="https://epss.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+  <meta name="apple-mobile-web-app-title" content="epss.cr" />
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://epss.cr.hahwul.com/" class="logo">epss.cr <span>Documentation</span></a>
+  <nav>
+    <a href="https://epss.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://epss.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <a href="https://github.com/hahwul/epss.cr">GitHub</a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <a href="https://epss.cr.hahwul.com/" class="sidebar-logo">
+      <strong>epss.cr</strong>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/api-client/">API Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/csv-feed/">CSV Feed</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/time-series/">Time-series</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/json-and-bands/">JSON &amp; Bands</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/api-reference/score/">Score</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/band/">Band</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/client/">Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/query/">Query</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/response/">Response</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/csv/">CSV</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Query</h1>
+    <p><code>EPSS::Query</code> is an immutable value object that captures every supported
+parameter of the FIRST EPSS REST API. The HTTP client uses it
+internally; you can also use it directly to build URLs without going
+through the client.</p>
+<h2 id="constructor">Constructor</h2>
+<pre><code class="language-crystal hljs">EPSS::Query.new(
+  cves:           Array(String) = [] of String,
+  date:           Time? = nil,
+  days:           Int32? = nil,
+  epss_gt:        Float64? = nil,
+  percentile_gt:  Float64? = nil,
+  epss_lt:        Float64? = nil,
+  percentile_lt:  Float64? = nil,
+  q:              String? = nil,
+  scope:          String? = nil,
+  order:          String? = nil,
+  offset:         Int32? = nil,
+  limit:          Int32? = nil,
+)
+</code></pre>
+<p>CVE ids are normalized to upper-case at construction.</p>
+<h2 id="validation">Validation</h2>
+<p><code>new</code> raises <code>EPSS::ParseError</code> if:</p>
+<ul>
+<li>any threshold (<code>epss_gt</code>, <code>epss_lt</code>, <code>percentile_gt</code>, <code>percentile_lt</code>)
+is outside <code>[0.0, 1.0]</code>;</li>
+<li><code>offset</code> is negative;</li>
+<li><code>limit</code> is non-positive.</li>
+</ul>
+<h2 id="encoding">Encoding</h2>
+<h3 id="to-params-arraystring-string"><code>#to_params : Array({String, String})</code></h3>
+<p>Returns the (key, value) pairs that should appear in the URL query
+string, in stable order, with unset fields omitted.</p>
+<h3 id="to-query-string-string"><code>#to_query_string : String</code></h3>
+<p>Returns the URL-encoded query string ready to attach to a URI. Built
+through <code>URI::Params.build</code>, so values are properly encoded (commas in a
+CVE list become <code>%2C</code>, which the FIRST API accepts).</p>
+<h2 id="immutable-derivation">Immutable derivation</h2>
+<p>The <code>with_*</code> helpers return new instances and never mutate the original:</p>
+<pre><code class="language-crystal hljs">base = EPSS::Query.new(cves: [&quot;CVE-2022-27225&quot;])
+page = base.with_offset(100).with_limit(50)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Helper</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>#with_cves(Array(String) | String)</code></td>
+<td>new <code>Query</code> with <code>cves</code> replaced</td>
+</tr>
+<tr>
+<td><code>#with_date(Time)</code></td>
+<td>new <code>Query</code> with <code>date</code> set</td>
+</tr>
+<tr>
+<td><code>#with_offset(Int32)</code></td>
+<td>new <code>Query</code> with <code>offset</code> set</td>
+</tr>
+<tr>
+<td><code>#with_limit(Int32)</code></td>
+<td>new <code>Query</code> with <code>limit</code> set</td>
+</tr>
+</tbody>
+</table>
+<h2 id="examples">Examples</h2>
+<pre><code class="language-crystal hljs"># Top-100 highest EPSS today.
+EPSS::Query.new(order: &quot;!epss&quot;, limit: 100)
+
+# All CVEs above the 99th percentile, ordered by EPSS.
+EPSS::Query.new(percentile_gt: 0.99, order: &quot;!epss&quot;)
+
+# Time-series history for one CVE.
+EPSS::Query.new(cves: [&quot;CVE-2022-27225&quot;], scope: &quot;time-series&quot;)
+</code></pre>
+<p>See also the <a href="/user-guide/api-client/">API Client guide</a> for end-to-end
+examples.</p>
+
+    <div class="docs-footer">
+      <p>epss.cr — A Crystal implementation of the Exploit Prediction Scoring System.</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+<script src="https://epss.cr.hahwul.com/js/search.js"></script>
+</body>
+</html>

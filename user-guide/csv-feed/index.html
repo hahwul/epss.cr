@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Parsing the public daily EPSS score dump">
+  <title>CSV Feed - epss.cr</title>
+  <meta property="og:title" content="CSV Feed">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://epss.cr.hahwul.com/user-guide/csv-feed/">
+  <meta property="og:description" content="Parsing the public daily EPSS score dump">
+  <meta property="og:image" content="https://epss.cr.hahwul.com/og-images/user-guide-csv-feed.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CSV Feed">
+  <meta name="twitter:description" content="Parsing the public daily EPSS score dump">
+  <meta name="twitter:image" content="https://epss.cr.hahwul.com/og-images/user-guide-csv-feed.svg">
+  <link rel="stylesheet" href="https://epss.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+  <meta name="apple-mobile-web-app-title" content="epss.cr" />
+</head>
+<body data-section="user-guide">
+<header class="docs-header">
+  <a href="https://epss.cr.hahwul.com/" class="logo">epss.cr <span>Documentation</span></a>
+  <nav>
+    <a href="https://epss.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://epss.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <a href="https://github.com/hahwul/epss.cr">GitHub</a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <a href="https://epss.cr.hahwul.com/" class="sidebar-logo">
+      <strong>epss.cr</strong>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/api-client/">API Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/csv-feed/">CSV Feed</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/time-series/">Time-series</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/json-and-bands/">JSON &amp; Bands</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/api-reference/score/">Score</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/band/">Band</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/client/">Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/query/">Query</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/response/">Response</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/csv/">CSV</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>CSV Feed</h1>
+    <p>FIRST publishes a fresh CSV dump of every EPSS score every day at
+<code>https://epss.cyentia.com/epss_scores-YYYY-MM-DD.csv.gz</code>.</p>
+<p>The file format is a single <code>#</code>-prefixed metadata line, a header row, and
+the score rows:</p>
+<pre><code class="language-text hljs">#model_version:v2025.03.14,score_date:2026-05-18T00:00:00Z
+cve,epss,percentile
+CVE-1999-0001,0.0046,0.7385
+CVE-1999-0002,0.04525,0.92176
+...
+</code></pre>
+<p><code>EPSS::CSV</code> parses both the gzipped and uncompressed variants.</p>
+<h2 id="stream-by-row-recommended-for-the-full-feed">Stream-by-row (recommended for the full feed)</h2>
+<p>The current feed is ~240k rows. <code>EPSS::CSV.each_score</code> streams them
+without buffering:</p>
+<pre><code class="language-crystal hljs">require &quot;epss&quot;
+
+File.open(&quot;epss_scores-2026-05-18.csv.gz&quot;) do |io|
+  EPSS::CSV.each_score(io) do |score|
+    db.upsert(score.cve, score.epss, score.percentile)
+  end
+end
+</code></pre>
+<p>The gzip magic bytes are auto-detected — pass either the compressed or
+the decompressed file. A <code>String</code>, an <code>IO</code>, or a <code>Path</code> all work as
+input.</p>
+<h2 id="load-the-whole-feed">Load the whole feed</h2>
+<p>If you want metadata + all rows in memory, use <code>EPSS::CSV.parse</code>:</p>
+<pre><code class="language-crystal hljs">feed = EPSS::CSV.parse(File.read(&quot;epss_scores-2026-05-18.csv.gz&quot;))
+feed.metadata.model_version  # =&gt; &quot;v2025.03.14&quot;
+feed.metadata.score_date     # =&gt; Time
+feed.scores.size             # =&gt; 240000+
+</code></pre>
+<p><code>Feed</code> is <code>Enumerable(Score)</code>, so iteration, filtering, and reduction
+work directly:</p>
+<pre><code class="language-crystal hljs">feed.select { |s| s.epss &gt; 0.5 }
+   .sort.reverse
+   .first(20)
+   .each { |s| puts s }
+</code></pre>
+<h2 id="date-handling">Date handling</h2>
+<p>Every row in <code>Feed#scores</code> is stamped with the <code>score_date</code> from the
+file's metadata header (rows in the feed itself don't carry per-row
+dates). If you parse a feed that omits the <code>#</code> header — for example, a
+hand-trimmed local copy — <code>Score#date</code> is <code>nil</code> and you'll need to set
+it yourself.</p>
+<h2 id="errors">Errors</h2>
+<p><code>EPSS::CSV.parse</code> raises <code>EPSS::ParseError</code> when:</p>
+<ul>
+<li>The header row is missing <code>cve</code>, <code>epss</code>, or <code>percentile</code>.</li>
+<li>A row has fewer columns than the header declared.</li>
+<li>A numeric value can't be coerced to <code>Float64</code>.</li>
+<li>A row's <code>date</code> field is non-empty but doesn't match <code>%Y-%m-%d</code>.</li>
+</ul>
+<p>The streaming form (<code>each_score</code>) raises the same errors at the point of
+the bad row, so a corrupt mid-file row stops iteration.</p>
+
+    <div class="docs-footer">
+      <p>epss.cr — A Crystal implementation of the Exploit Prediction Scoring System.</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+<script src="https://epss.cr.hahwul.com/js/search.js"></script>
+</body>
+</html>

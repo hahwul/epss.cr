@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="30-day EPSS history per CVE">
+  <title>Time-series - epss.cr</title>
+  <meta property="og:title" content="Time-series">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://epss.cr.hahwul.com/user-guide/time-series/">
+  <meta property="og:description" content="30-day EPSS history per CVE">
+  <meta property="og:image" content="https://epss.cr.hahwul.com/og-images/user-guide-time-series.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Time-series">
+  <meta name="twitter:description" content="30-day EPSS history per CVE">
+  <meta name="twitter:image" content="https://epss.cr.hahwul.com/og-images/user-guide-time-series.svg">
+  <link rel="stylesheet" href="https://epss.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+  <meta name="apple-mobile-web-app-title" content="epss.cr" />
+</head>
+<body data-section="user-guide">
+<header class="docs-header">
+  <a href="https://epss.cr.hahwul.com/" class="logo">epss.cr <span>Documentation</span></a>
+  <nav>
+    <a href="https://epss.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://epss.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <a href="https://github.com/hahwul/epss.cr">GitHub</a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <a href="https://epss.cr.hahwul.com/" class="sidebar-logo">
+      <strong>epss.cr</strong>
+    </a>
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/api-client/">API Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/csv-feed/">CSV Feed</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/time-series/">Time-series</a></li>
+        <li><a href="https://epss.cr.hahwul.com/user-guide/json-and-bands/">JSON &amp; Bands</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://epss.cr.hahwul.com/api-reference/score/">Score</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/band/">Band</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/client/">Client</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/query/">Query</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/response/">Response</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/csv/">CSV</a></li>
+        <li><a href="https://epss.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Time-series</h1>
+    <p>The FIRST EPSS API exposes per-CVE history via the <code>scope=time-series</code>
+query parameter. epss.cr flattens the nested response into a regular
+<code>Array(Score)</code> — one entry per day — so the rest of your code doesn't
+need a special case.</p>
+<h2 id="quick-history">Quick history</h2>
+<pre><code class="language-crystal hljs">client = EPSS::Client.new
+series = client.time_series(&quot;CVE-2022-27225&quot;)
+
+series.size            # =&gt; 31 (today + 30 prior days)
+series.first.date.not_nil!.to_s(&quot;%Y-%m-%d&quot;)  # oldest
+series.last.date.not_nil!.to_s(&quot;%Y-%m-%d&quot;)   # most recent
+</code></pre>
+<p><code>#time_series</code> sorts the results oldest-first.</p>
+<h2 id="what-the-api-returns">What the API returns</h2>
+<p>For <code>scope=time-series</code>, FIRST wraps each CVE's history inside the data
+row:</p>
+<pre><code class="language-json hljs">{
+  &quot;data&quot;: [{
+    &quot;cve&quot;: &quot;CVE-2022-27225&quot;,
+    &quot;epss&quot;: &quot;0.001870000&quot;,
+    &quot;percentile&quot;: &quot;0.401290000&quot;,
+    &quot;date&quot;: &quot;2026-05-18&quot;,
+    &quot;time-series&quot;: [
+      {&quot;epss&quot;: &quot;0.001870000&quot;, &quot;percentile&quot;: &quot;0.401770000&quot;, &quot;date&quot;: &quot;2026-05-17&quot;},
+      ...
+    ]
+  }]
+}
+</code></pre>
+<p><code>EPSS::Response.from_json</code> automatically:</p>
+<ol>
+<li>Promotes the parent row's <code>{cve, epss, percentile, date}</code> to a <code>Score</code>.</li>
+<li>Expands every entry of <code>time-series</code> into its own <code>Score</code>, copying the
+parent's <code>cve</code>.</li>
+</ol>
+<p>So an <code>EPSS::Response</code> for a time-series query carries ~30 <code>Score</code>s per
+queried CVE in its <code>scores</code> array.</p>
+<h2 id="plotting-charting">Plotting / charting</h2>
+<p>Because each <code>Score</code> is a regular value object with <code>cve</code>, <code>epss</code>,
+<code>percentile</code>, and <code>date</code>, plotting libraries can ingest the series
+directly:</p>
+<pre><code class="language-crystal hljs">points = client.time_series(&quot;CVE-2022-27225&quot;).map do |s|
+  {x: s.date.not_nil!.to_unix, y: s.epss}
+end
+</code></pre>
+<h2 id="time-series-filters">Time-series + filters</h2>
+<p>You can combine <code>scope=time-series</code> with threshold filters. The
+flattening preserves filter behavior because the server pre-filters CVEs
+before expanding history.</p>
+<pre><code class="language-crystal hljs">query = EPSS::Query.new(
+  cves: [&quot;CVE-2022-27225&quot;, &quot;CVE-2021-44228&quot;],
+  scope: &quot;time-series&quot;,
+)
+client.fetch(query).scores.size  # ~31 days × 2 CVEs ≈ 62
+</code></pre>
+<h2 id="pagination">Pagination</h2>
+<p><code>Client#each_score</code> advances by the server-reported row count
+(<code>Response#row_count</code>) rather than the flattened score count, so paging
+through time-series queries never skips a CVE.</p>
+
+    <div class="docs-footer">
+      <p>epss.cr — A Crystal implementation of the Exploit Prediction Scoring System.</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+<script src="https://epss.cr.hahwul.com/js/search.js"></script>
+</body>
+</html>
