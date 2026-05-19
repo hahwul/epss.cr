@@ -7,8 +7,9 @@ A Crystal implementation of the [Exploit Prediction Scoring System
 
 - **The FIRST REST API** at `https://api.first.org/data/v1/epss` — lookup
   by CVE, date range, threshold, percentile, with transparent pagination.
-- **The daily CSV feed** at `https://epss.cyentia.com/epss_scores-YYYY-MM-DD.csv.gz`
-  — streamed row-by-row, gzip auto-detected.
+- **The daily CSV feed** at `https://epss.empiricalsecurity.com/epss_scores-YYYY-MM-DD.csv.gz`
+  — streamed row-by-row, gzip auto-detected. The legacy `epss.cyentia.com`
+  host still mirrors the same file and can be supplied via `host:`.
 
 It is shaped after [`cvss.cr`](https://github.com/hahwul/cvss.cr): typed
 value objects, structural equality, JSON round-trip, and a stable error
@@ -71,6 +72,16 @@ feed = EPSS::CSV.parse(File.read("epss_scores-2026-05-18.csv.gz"))
 feed.metadata.model_version # => "v2025.03.14"
 feed.metadata.score_date    # => Time(2026-05-18)
 feed.scores.size            # => 240000+
+```
+
+### Download a daily feed by date
+
+```crystal
+EPSS::CSV.feed_url(Time.utc(2026, 5, 18))
+# => URI("https://epss.empiricalsecurity.com/epss_scores-2026-05-18.csv.gz")
+
+feed = EPSS::CSV.fetch(Time.utc(2026, 5, 18))
+feed.metadata.score_date    # => Time(2026-05-18)
 ```
 
 ### JSON round-trip

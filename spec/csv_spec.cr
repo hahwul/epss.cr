@@ -91,6 +91,19 @@ describe EPSS::CSV do
     end
   end
 
+  describe ".feed_url" do
+    it "builds the canonical empirical-security host URL by date" do
+      uri = EPSS::CSV.feed_url(Time.utc(2026, 5, 18))
+      uri.to_s.should eq("https://epss.empiricalsecurity.com/epss_scores-2026-05-18.csv.gz")
+    end
+
+    it "accepts a legacy host override" do
+      uri = EPSS::CSV.feed_url(Time.utc(2026, 5, 18), host: "epss.cyentia.com")
+      uri.host.should eq("epss.cyentia.com")
+      uri.path.should eq("/epss_scores-2026-05-18.csv.gz")
+    end
+  end
+
   describe ".each_score" do
     it "streams without buffering" do
       csv = <<-CSV

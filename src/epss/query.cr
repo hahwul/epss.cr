@@ -45,6 +45,23 @@ module EPSS
     getter offset : Int32?
     getter limit : Int32?
 
+    # Comma-separated list of fields to return. Maps to FIRST's global
+    # `fields` query param — request a projected payload (e.g.
+    # `"cve,epss"`) to skip percentile/date when the caller doesn't need
+    # them.
+    getter fields : Array(String)?
+
+    # Request pretty-printed JSON. Off by default (extra whitespace is
+    # wasted bandwidth for programmatic consumers); set when capturing
+    # API responses to disk for human review.
+    getter pretty : Bool?
+
+    # Force the FIRST envelope wrapper. The EPSS endpoint already wraps
+    # responses by default, but `envelope=false` can be requested to
+    # receive a bare data array — set this explicitly when you want to
+    # override the server's default behavior.
+    getter envelope : Bool?
+
     def initialize(
       @cves : Array(String) = [] of String,
       @date : Time? = nil,
@@ -58,6 +75,9 @@ module EPSS
       @order : String? = nil,
       @offset : Int32? = nil,
       @limit : Int32? = nil,
+      @fields : Array(String)? = nil,
+      @pretty : Bool? = nil,
+      @envelope : Bool? = nil,
     )
       @cves = @cves.map(&.upcase)
       validate!
@@ -78,6 +98,51 @@ module EPSS
 
     def with_date(date : Time) : Query
       copy(date: date)
+    end
+
+    def with_days(days : Int32) : Query
+      copy(days: days)
+    end
+
+    def with_epss_gt(value : Float64) : Query
+      copy(epss_gt: value)
+    end
+
+    def with_epss_lt(value : Float64) : Query
+      copy(epss_lt: value)
+    end
+
+    def with_percentile_gt(value : Float64) : Query
+      copy(percentile_gt: value)
+    end
+
+    def with_percentile_lt(value : Float64) : Query
+      copy(percentile_lt: value)
+    end
+
+    def with_q(value : String) : Query
+      copy(q: value)
+    end
+
+    def with_scope(value : String) : Query
+      copy(scope: value)
+    end
+
+    def with_order(value : String) : Query
+      copy(order: value)
+    end
+
+    def with_fields(value : Array(String) | String) : Query
+      list = value.is_a?(String) ? value.split(',').map(&.strip).reject(&.empty?) : value
+      copy(fields: list)
+    end
+
+    def with_pretty(value : Bool) : Query
+      copy(pretty: value)
+    end
+
+    def with_envelope(value : Bool) : Query
+      copy(envelope: value)
     end
 
     # Encode this query as an array of `{key, value}` URL parameter pairs,
@@ -101,6 +166,13 @@ module EPSS
       params << {"order", @order.not_nil!} unless @order.nil?
       params << {"offset", @offset.not_nil!.to_s} unless @offset.nil?
       params << {"limit", @limit.not_nil!.to_s} unless @limit.nil?
+      if f = @fields
+        params << {"fields", f.join(',')} unless f.empty?
+      end
+      params << {"pretty", "true"} if @pretty == true
+      unless (e = @envelope).nil?
+        params << {"envelope", e ? "true" : "false"}
+      end
       params
     end
 
@@ -133,10 +205,24 @@ module EPSS
       if (v = @limit) && v <= 0
         raise ParseError.new("limit must be positive")
       end
+      if (v = @days) && v <= 0
+        raise ParseError.new("days must be positive")
+      end
     end
 
+    # Render a probability as a fixed-point decimal in `[0.0, 1.0]`. Plain
+    # `Float#to_s` flips to scientific notation (e.g. `1.0e-7`) for very
+    # small values, which the FIRST API rejects as a malformed parameter.
+    # Trailing zeros are stripped so `0.5` round-trips as `"0.5"` rather
+    # than `"0.500000000"`.
     private def format_float(value : Float64) : String
-      value.to_s
+      return "0" if value.zero?
+      s = "%.9f" % value
+      if s.includes?('.')
+        s = s.rstrip('0')
+        s = s.rchop('.') if s.ends_with?('.')
+      end
+      s
     end
 
     private def copy(
@@ -152,6 +238,9 @@ module EPSS
       order : String? = nil,
       offset : Int32? = nil,
       limit : Int32? = nil,
+      fields : Array(String)? = nil,
+      pretty : Bool? = nil,
+      envelope : Bool? = nil,
     ) : Query
       Query.new(
         cves: cves || @cves,
@@ -166,6 +255,9 @@ module EPSS
         order: order || @order,
         offset: offset || @offset,
         limit: limit || @limit,
+        fields: fields || @fields,
+        pretty: pretty.nil? ? @pretty : pretty,
+        envelope: envelope.nil? ? @envelope : envelope,
       )
     end
   end

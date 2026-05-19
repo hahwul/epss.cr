@@ -31,6 +31,33 @@ describe EPSS::Query do
       params["limit"].should eq("50")
       params["order"].should eq("!epss")
     end
+
+    it "emits decimal notation for small thresholds (no scientific form)" do
+      q = EPSS::Query.new(epss_gt: 0.0000001)
+      params = q.to_params.to_h
+      params["epss-gt"].should_not contain("e")
+      params["epss-gt"].should eq("0.0000001")
+    end
+
+    it "encodes fields/pretty/envelope global params" do
+      q = EPSS::Query.new(fields: ["cve", "epss"], pretty: true, envelope: false)
+      params = q.to_params.to_h
+      params["fields"].should eq("cve,epss")
+      params["pretty"].should eq("true")
+      params["envelope"].should eq("false")
+    end
+
+    it "omits pretty when false and envelope when nil" do
+      q = EPSS::Query.new(pretty: false)
+      params = q.to_params.to_h
+      params.has_key?("pretty").should be_false
+      params.has_key?("envelope").should be_false
+    end
+
+    it "encodes days" do
+      q = EPSS::Query.new(days: 7)
+      q.to_params.to_h["days"].should eq("7")
+    end
   end
 
   describe "#to_query_string" do
@@ -56,6 +83,10 @@ describe EPSS::Query do
       expect_raises(EPSS::ParseError) { EPSS::Query.new(offset: -1) }
       expect_raises(EPSS::ParseError) { EPSS::Query.new(limit: 0) }
     end
+
+    it "rejects non-positive days" do
+      expect_raises(EPSS::ParseError) { EPSS::Query.new(days: 0) }
+    end
   end
 
   describe "with_* derivation" do
@@ -64,6 +95,33 @@ describe EPSS::Query do
       q2 = q.with_limit(50)
       q.limit.should be_nil
       q2.limit.should eq(50)
+    end
+
+    it "covers the full parameter surface" do
+      q = EPSS::Query.new
+        .with_q("openssl")
+        .with_scope("time-series")
+        .with_order("!epss")
+        .with_days(7)
+        .with_epss_gt(0.1)
+        .with_epss_lt(0.9)
+        .with_percentile_gt(0.5)
+        .with_percentile_lt(0.99)
+        .with_fields("cve,epss")
+        .with_pretty(true)
+        .with_envelope(false)
+      params = q.to_params.to_h
+      params["q"].should eq("openssl")
+      params["scope"].should eq("time-series")
+      params["order"].should eq("!epss")
+      params["days"].should eq("7")
+      params["epss-gt"].should eq("0.1")
+      params["epss-lt"].should eq("0.9")
+      params["percentile-gt"].should eq("0.5")
+      params["percentile-lt"].should eq("0.99")
+      params["fields"].should eq("cve,epss")
+      params["pretty"].should eq("true")
+      params["envelope"].should eq("false")
     end
   end
 end

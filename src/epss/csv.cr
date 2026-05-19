@@ -1,10 +1,13 @@
 require "csv"
 require "compress/gzip"
+require "http/client"
 require "./score"
 
 module EPSS
   # Parser for the public EPSS daily feed published at
-  # `https://epss.cyentia.com/epss_scores-YYYY-MM-DD.csv.gz`.
+  # `https://epss.empiricalsecurity.com/epss_scores-YYYY-MM-DD.csv.gz`
+  # (the prior host `https://epss.cyentia.com/...` still mirrors the same
+  # file and is accepted by `CSV.feed_url(..., host: ...)`).
   #
   # Format (verbatim, leading `#` line, then a header row, then rows):
   #
@@ -22,6 +25,43 @@ module EPSS
   # feed's `score_date`.
   module CSV
     extend self
+
+    # Canonical host that publishes the gzipped daily EPSS feed.
+    FEED_HOST = "epss.empiricalsecurity.com"
+
+    # Build the canonical feed URL for a given UTC date. The FIRST EPSS
+    # team publishes one file per day at this exact path; both the new
+    # `empiricalsecurity.com` host and the legacy `cyentia.com` host
+    # serve identical content.
+    #
+    # ```
+    # EPSS::CSV.feed_url(Time.utc(2026, 5, 18))
+    # # => URI("https://epss.empiricalsecurity.com/epss_scores-2026-05-18.csv.gz")
+    # ```
+    def feed_url(date : Time, *, host : String = FEED_HOST) : URI
+      URI.parse("https://#{host}/epss_scores-#{date.to_s("%Y-%m-%d")}.csv.gz")
+    end
+
+    # Download and parse the daily feed for `date` in one shot. Streams
+    # the gzipped body through `Compress::Gzip::Reader` so the full
+    # 240k+ row file never lands in memory.
+    #
+    # ```
+    # feed = EPSS::CSV.fetch(Time.utc(2026, 5, 18))
+    # feed.scores.size # => 240000+
+    # ```
+    def fetch(date : Time, *, host : String = FEED_HOST) : Feed
+      uri = feed_url(date, host: host)
+      response = HTTP::Client.get(uri)
+      unless response.status_code == 200
+        raise APIError.new(
+          "EPSS feed download failed: HTTP #{response.status_code}",
+          status: response.status_code,
+          body: response.body,
+        )
+      end
+      parse(IO::Memory.new(response.body))
+    end
 
     # Metadata pulled from the leading `#` header of an EPSS feed file.
     struct Metadata
