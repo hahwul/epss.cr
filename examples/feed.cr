@@ -9,10 +9,10 @@ top_n = (ARGV.first? || "10").to_i
 input = ARGV[1]?
 
 io : IO = if input
-            File.open(input)
-          else
-            STDIN
-          end
+  File.open(input)
+else
+  STDIN
+end
 
 top = [] of EPSS::Score
 EPSS::CSV.each_score(io) do |score|

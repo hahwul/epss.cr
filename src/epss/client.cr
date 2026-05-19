@@ -51,12 +51,12 @@ module EPSS
   # `Query`:
   #
   # ```
-  # client.score("CVE-2022-27225")     # => EPSS::Score?
-  # client.scores(["CVE-1", "CVE-2"])   # => Array(EPSS::Score)
+  # client.score("CVE-2022-27225")       # => EPSS::Score?
+  # client.scores(["CVE-1", "CVE-2"])    # => Array(EPSS::Score)
   # client.each_score(query) { |s| ... } # paginated stream
   # ```
   class Client
-    DEFAULT_BASE_URI = URI.parse("https://api.first.org/data/v1/epss")
+    DEFAULT_BASE_URI   = URI.parse("https://api.first.org/data/v1/epss")
     DEFAULT_USER_AGENT = "epss.cr/#{EPSS::VERSION} (+https://github.com/hahwul/epss.cr)"
 
     getter base_uri : URI

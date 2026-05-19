@@ -112,8 +112,8 @@ module EPSS
 
     private def self.coerce_date(value) : Time?
       case value
-      when Nil    then nil
-      when Time   then value
+      when Nil  then nil
+      when Time then value
       when String
         stripped = value.strip
         return nil if stripped.empty?

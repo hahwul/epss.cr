@@ -1,0 +1,19 @@
+epss.cr
+Copyright (c) 2026 hahwul
+
+Licensed under the MIT License. See LICENSE for the full text.
+
+================================================================================
+Upstream specifications
+================================================================================
+
+This library targets the Exploit Prediction Scoring System (EPSS) published by
+the Forum of Incident Response and Security Teams (FIRST):
+
+  - Overview:          https://www.first.org/epss/
+  - REST API:          https://www.first.org/epss/api
+  - Daily score feed:  https://epss.cyentia.com/
+
+The EPSS scores themselves are produced by the EPSS Special Interest Group and
+distributed under the terms documented on the FIRST EPSS site. This library
+contains no EPSS data — it only fetches and parses it.

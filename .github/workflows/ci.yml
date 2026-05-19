@@ -1,0 +1,41 @@
+---
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crystal: [latest, "1.20.2"]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Crystal
+        uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: ${{ matrix.crystal }}
+      - name: Install dependencies
+        run: shards install
+      - name: Check formatting
+        run: crystal tool format --check
+      - name: Run tests
+        run: crystal spec
+      - name: Type-check every example
+        run: |
+          for f in examples/*.cr; do
+            echo "::group::$f"
+            crystal build "$f" -o /tmp/epss_example --no-codegen
+            echo "::endgroup::"
+          done
+      - name: Run offline examples (smoke)
+        run: |
+          # Only the json_io example is fully offline — the REST/CSV ones
+          # hit api.first.org / epss.cyentia.com and are not stable enough
+          # for unattended CI execution. Type-checking covers them above.
+          crystal run examples/json_io.cr
