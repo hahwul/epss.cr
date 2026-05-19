@@ -1,0 +1,17 @@
+name: epss
+version: 0.1.0
+description: |
+  A Crystal implementation of the Exploit Prediction Scoring System
+  (EPSS). Fetches scores from the FIRST API, parses the daily CSV feed,
+  and exposes a typed, sortable Score model with qualitative bands.
+
+authors:
+  - hahwul <hahwul@gmail.com>
+
+crystal: '>= 1.20.2'
+
+license: MIT
+
+repository: https://github.com/hahwul/epss.cr
+homepage: https://github.com/hahwul/epss.cr
+documentation: https://github.com/hahwul/epss.cr

@@ -1,18 +1,30 @@
-# epss
+# epss.cr
 
-TODO: Write a description here
+A Crystal implementation of the [Exploit Prediction Scoring System
+(EPSS)](https://www.first.org/epss/) from FIRST.
+
+`epss.cr` covers the two ways EPSS is consumed in practice:
+
+- **The FIRST REST API** at `https://api.first.org/data/v1/epss` — lookup
+  by CVE, date range, threshold, percentile, with transparent pagination.
+- **The daily CSV feed** at `https://epss.cyentia.com/epss_scores-YYYY-MM-DD.csv.gz`
+  — streamed row-by-row, gzip auto-detected.
+
+It is shaped after [`cvss.cr`](https://github.com/hahwul/cvss.cr): typed
+value objects, structural equality, JSON round-trip, and a stable error
+hierarchy.
 
 ## Installation
 
-1. Add the dependency to your `shard.yml`:
+Add to your `shard.yml`:
 
-   ```yaml
-   dependencies:
-     epss:
-       github: your-github-user/epss
-   ```
+```yaml
+dependencies:
+  epss:
+    github: hahwul/epss.cr
+```
 
-2. Run `shards install`
+Run `shards install`.
 
 ## Usage
 
@@ -20,20 +32,130 @@ TODO: Write a description here
 require "epss"
 ```
 
-TODO: Write usage instructions here
+### Look up one CVE
+
+```crystal
+if score = EPSS.score("CVE-2022-27225")
+  puts "EPSS=#{score.epss} percentile=#{score.percentile} band=#{score.band}"
+end
+```
+
+### Batch lookup
+
+```crystal
+EPSS.scores(["CVE-2024-1", "CVE-2024-2", "CVE-2024-3"]).each do |s|
+  puts s
+end
+```
+
+### Threshold filter with pagination
+
+```crystal
+client = EPSS::Client.new
+client.each_score(EPSS::Query.new(epss_gt: 0.95, order: "!epss")) do |score|
+  puts "#{score.cve}\t#{score.epss}"
+end
+```
+
+### Parse the daily CSV feed
+
+```crystal
+File.open("epss_scores-2026-05-18.csv.gz") do |io|
+  EPSS::CSV.each_score(io) do |score|
+    db.upsert(score.cve, score.epss, score.percentile)
+  end
+end
+
+# Or load it all at once and inspect the file metadata:
+feed = EPSS::CSV.parse(File.read("epss_scores-2026-05-18.csv.gz"))
+feed.metadata.model_version # => "v2025.03.14"
+feed.metadata.score_date    # => Time(2026-05-18)
+feed.scores.size            # => 240000+
+```
+
+### JSON round-trip
+
+```crystal
+score = EPSS::Score.new("CVE-2022-27225", 0.001870, 0.401290, Time.utc(2026, 5, 18))
+json = score.to_json
+EPSS.from_json(json).first # => structurally equal Score
+```
+
+### Bands
+
+`EPSS::Band` provides a qualitative bucket — useful for surfacing rows
+in dashboards or filtering noisy low-probability CVEs.
+
+```crystal
+EPSS::Band.from_epss(0.92)       # => EPSS::Band::Critical
+EPSS::Band.from_percentile(0.85) # => EPSS::Band::Medium
+score.band                       # uses the EPSS probability cutoffs
+score.percentile_band            # uses the percentile cutoffs
+```
+
+| Band     | EPSS probability        | Percentile rank |
+| -------- | ----------------------- | --------------- |
+| None     | `< 0.01`                | `< 0.50`        |
+| Low      | `[0.01, 0.10)`          | `[0.50, 0.80)`  |
+| Medium   | `[0.10, 0.30)`          | `[0.80, 0.90)`  |
+| High     | `[0.30, 0.70)`          | `[0.90, 0.99)`  |
+| Critical | `>= 0.70`               | `>= 0.99`       |
+
+The cutoffs are conventions — EPSS itself ships only numeric values.
+Pick whichever set fits the policy you're enforcing.
+
+## Configuring the client
+
+```crystal
+client = EPSS::Client.new(
+  base_uri: URI.parse("https://api.first.org/data/v1/epss"),
+  user_agent: "myapp/1.0",
+  max_retries: 5,
+  retry_backoff: 1.second,
+)
+```
+
+For tests, inject a custom `EPSS::Transport`:
+
+```crystal
+class FakeTransport < EPSS::Transport
+  def get(uri : URI, headers : HTTP::Headers) : HTTP::Client::Response
+    HTTP::Client::Response.new(200, body: my_fixture)
+  end
+end
+
+client = EPSS::Client.new(transport: FakeTransport.new)
+```
+
+## Error handling
+
+All errors descend from `EPSS::Error`:
+
+- `EPSS::ParseError` — malformed JSON / CSV / constructor argument.
+- `EPSS::APIError`   — HTTP non-2xx, or `status != "OK"` in the envelope.
+  Carries the response `status` and `body`.
+
+Use `EPSS.from_json?` for the non-raising form.
 
 ## Development
 
-TODO: Write development instructions here
+```bash
+crystal spec      # run the test suite
+crystal build src/epss.cr --no-codegen  # type-check
+```
+
+The HTTP-touching code is fully driven through an injectable
+`EPSS::Transport`; specs use a `StubTransport` (see `spec/spec_helper.cr`)
+and never hit the network.
 
 ## Contributing
 
-1. Fork it (<https://github.com/your-github-user/epss/fork>)
-2. Create your feature branch (`git checkout -b my-new-feature`)
+1. Fork it (<https://github.com/hahwul/epss.cr/fork>)
+2. Create your feature branch (`git checkout -b feat/your-feature`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
+4. Push to the branch (`git push origin feat/your-feature`)
 5. Create a new Pull Request
 
-## Contributors
+## License
 
-- [hahwul](https://github.com/your-github-user) - creator and maintainer
+MIT. See [LICENSE](./LICENSE).
