@@ -39,6 +39,31 @@ require "epss"
 if score = EPSS.score("CVE-2022-27225")
   puts "EPSS=#{score.epss} percentile=#{score.percentile} band=#{score.band}"
 end
+
+# Pluck just one field
+EPSS.band("CVE-2022-27225")       # => EPSS::Band::Low
+EPSS.epss("CVE-2022-27225")       # => 0.00187
+EPSS.percentile("CVE-2022-27225") # => 0.40129
+```
+
+### One-liner queries
+
+```crystal
+EPSS.top(10)                  # 10 highest-EPSS CVEs
+EPSS.above(0.95)              # every CVE above the threshold (paginated)
+EPSS.search("openssl")        # free-text search, EPSS-desc
+EPSS.feed(Time.utc(2026, 5, 18))  # daily CSV feed
+EPSS.today_feed               # today's CSV feed
+```
+
+Same builders are available on `EPSS::Query` for composition:
+
+```crystal
+EPSS::Query.top(50).with_percentile_gt(0.9)
+EPSS::Query.search("kernel").with_limit(25)
+EPSS::Query.above(0.5).with_order("!epss")
+EPSS::Query.for_cve("CVE-2022-27225")
+EPSS::Query.recent(7)
 ```
 
 ### Batch lookup
@@ -122,8 +147,21 @@ in dashboards or filtering noisy low-probability CVEs.
 ```crystal
 EPSS::Band.from_epss(0.92)       # => EPSS::Band::Critical
 EPSS::Band.from_percentile(0.85) # => EPSS::Band::Medium
+EPSS::Band.parse("critical")     # => EPSS::Band::Critical
 score.band                       # uses the EPSS probability cutoffs
 score.percentile_band            # uses the percentile cutoffs
+score.critical?                  # band predicates: none?/low?/medium?/high?/critical?
+score.at_least?(:high)           # threshold check (default :high)
+```
+
+### Score helpers
+
+```crystal
+score.percentage             # => 42.0  (epss * 100, display-friendly)
+score.percentile_percentage  # => 99.0
+score.age                    # Time::Span since the score was published
+older = EPSS.score("CVE-1", date: Time.utc - 7.days)
+score.delta(older)           # change in EPSS probability since last week
 ```
 
 | Band     | EPSS probability        | Percentile rank |

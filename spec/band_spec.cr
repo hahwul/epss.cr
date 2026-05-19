@@ -42,4 +42,27 @@ describe EPSS::Band do
     (EPSS::Band::Medium > EPSS::Band::Low).should be_true
     (EPSS::Band::Low > EPSS::Band::None).should be_true
   end
+
+  describe ".parse" do
+    it "round-trips the to_s labels case-insensitively" do
+      EPSS::Band.parse("Critical").should eq(EPSS::Band::Critical)
+      EPSS::Band.parse("low").should eq(EPSS::Band::Low)
+      EPSS::Band.parse("  HIGH  ").should eq(EPSS::Band::High)
+    end
+
+    it "raises for unknown labels" do
+      expect_raises(EPSS::ParseError, /unknown/) { EPSS::Band.parse("severe") }
+    end
+
+    it "parse? returns nil for unknown labels" do
+      EPSS::Band.parse?("nope").should be_nil
+    end
+  end
+
+  describe "#at_least?" do
+    it "compares against another band" do
+      EPSS::Band::High.at_least?(EPSS::Band::Medium).should be_true
+      EPSS::Band::Medium.at_least?(EPSS::Band::High).should be_false
+    end
+  end
 end

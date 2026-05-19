@@ -107,6 +107,46 @@ describe EPSS::Score do
     end
   end
 
+  describe "band predicates" do
+    it "exposes one predicate per band level" do
+      s = EPSS::Score.new("CVE-1", 0.9, 0.99)
+      s.critical?.should be_true
+      s.high?.should be_false
+      s.none?.should be_false
+    end
+
+    it "supports at_least? with symbols and bands" do
+      s = EPSS::Score.new("CVE-1", 0.5, 0.6)
+      s.at_least?(:high).should be_true
+      s.at_least?(:critical).should be_false
+      s.at_least?(EPSS::Band::Medium).should be_true
+    end
+  end
+
+  describe "display + temporal helpers" do
+    it "renders percentage" do
+      s = EPSS::Score.new("CVE-1", 0.42, 0.99)
+      s.percentage.should be_close(42.0, 1e-9)
+      s.percentile_percentage.should be_close(99.0, 1e-9)
+    end
+
+    it "computes age relative to now" do
+      s = EPSS::Score.new("CVE-1", 0.1, 0.5, Time.utc(2026, 5, 18))
+      span = s.age(Time.utc(2026, 5, 20)).not_nil!
+      span.total_days.should be_close(2.0, 1e-6)
+    end
+
+    it "returns nil age when no date" do
+      EPSS::Score.new("CVE-1", 0.1, 0.5).age.should be_nil
+    end
+
+    it "computes delta against another snapshot" do
+      newer = EPSS::Score.new("CVE-1", 0.5, 0.9, Time.utc(2026, 5, 20))
+      older = EPSS::Score.new("CVE-1", 0.2, 0.6, Time.utc(2026, 5, 18))
+      newer.delta(older).should be_close(0.3, 1e-9)
+    end
+  end
+
   describe "JSON serialization" do
     it "emits the FIRST API row shape" do
       s = EPSS::Score.new("CVE-2022-27225", 0.00187, 0.40129, Time.utc(2026, 5, 18))

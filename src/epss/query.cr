@@ -83,9 +83,68 @@ module EPSS
       validate!
     end
 
+    # Build a query that filters by a single CVE id. Sugar for the
+    # common case where `with_cves([cve])` would otherwise be required.
+    #
+    # ```
+    # EPSS::Query.for_cve("CVE-2022-27225")
+    # ```
+    def self.for_cve(cve : String) : Query
+      new(cves: [cve])
+    end
+
+    # Build a query that filters by multiple CVE ids.
+    def self.for_cves(cves : Enumerable(String)) : Query
+      new(cves: cves.to_a)
+    end
+
+    # Highest-EPSS-first query bounded by `n` rows. Use as a starting
+    # point for "top-N" dashboards.
+    #
+    # ```
+    # EPSS::Client.new.fetch(EPSS::Query.top(10)).scores
+    # ```
+    def self.top(n : Int32) : Query
+      new(order: "!epss", limit: n)
+    end
+
+    # CVEs whose EPSS probability is strictly above `threshold`. Defaults
+    # to the 0.95 cutoff commonly used by tier-1 triage policies.
+    def self.above(threshold : Float64 = 0.95) : Query
+      new(epss_gt: threshold, order: "!epss")
+    end
+
+    # CVEs whose EPSS probability is strictly below `threshold`. Pair
+    # with `above` for inverse filters.
+    def self.below(threshold : Float64) : Query
+      new(epss_lt: threshold)
+    end
+
+    # Free-text search query, sorted by EPSS descending.
+    #
+    # ```
+    # EPSS::Query.search("openssl")
+    # ```
+    def self.search(text : String) : Query
+      new(q: text, order: "!epss")
+    end
+
+    # Restrict results to scores published in the last `days` days.
+    # Maps to the FIRST `days` parameter rather than client-side
+    # filtering.
+    def self.recent(days : Int32) : Query
+      new(days: days)
+    end
+
     def with_cves(cves : Array(String) | String) : Query
       list = cves.is_a?(String) ? [cves] : cves
       copy(cves: list)
+    end
+
+    # Singular form of `with_cves`. Mirrors `Query.for_cve` for fluent
+    # chains where a `Query` already exists.
+    def with_cve(cve : String) : Query
+      copy(cves: [cve])
     end
 
     def with_offset(offset : Int32) : Query

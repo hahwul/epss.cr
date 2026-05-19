@@ -98,6 +98,38 @@ describe EPSS do
       result.not_nil!.cve.should eq("CVE-2022-27225")
     end
 
+    it ".band / .epss / .percentile pluck single fields" do
+      payload = fixture_envelope([
+        {cve: "CVE-1", epss: "0.500000000", percentile: "0.900000000", date: "2026-05-18"},
+      ])
+      EPSS.client = EPSS::Client.new(transport: StubTransport.from_body(payload))
+      EPSS.band("CVE-1").should eq(EPSS::Band::High)
+      EPSS.epss("CVE-1").should eq(0.5)
+      EPSS.percentile("CVE-1").should eq(0.9)
+    end
+
+    it ".top sends order=!epss and limit=N" do
+      payload = fixture_envelope([
+        {cve: "CVE-1", epss: "0.9", percentile: "0.99", date: "2026-05-18"},
+      ])
+      stub = StubTransport.from_body(payload)
+      EPSS.client = EPSS::Client.new(transport: stub)
+      EPSS.top(5)
+      qs = stub.requests.first[0].query.not_nil!
+      qs.should contain("order=%21epss")
+      qs.should contain("limit=5")
+    end
+
+    it ".search sends q and order" do
+      payload = fixture_envelope([] of NamedTuple(cve: String, epss: String, percentile: String, date: String))
+      stub = StubTransport.from_body(payload)
+      EPSS.client = EPSS::Client.new(transport: stub)
+      EPSS.search("openssl")
+      qs = stub.requests.first[0].query.not_nil!
+      qs.should contain("q=openssl")
+      qs.should contain("order=%21epss")
+    end
+
     it ".scores batches a list" do
       payload = fixture_envelope([
         {cve: "CVE-1", epss: "0.1", percentile: "0.5", date: "2026-05-18"},

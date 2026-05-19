@@ -50,6 +50,54 @@ module EPSS
       Band.from_percentile(@percentile)
     end
 
+    {% for name in %w(none low medium high critical) %}
+      # `true` when this score's EPSS-band equals `Band::{{name.id.camelcase}}`.
+      def {{name.id}}? : Bool
+        band == Band::{{name.id.camelcase}}
+      end
+    {% end %}
+
+    # Convenience: `true` when the EPSS-band is at least `threshold`.
+    # The default of `:high` matches the common "operationally relevant"
+    # cutoff used by triage dashboards.
+    #
+    # ```
+    # score.at_least?(:medium) # => Bool
+    # score.at_least?(EPSS::Band::Critical)
+    # ```
+    def at_least?(threshold : Band | Symbol = Band::High) : Bool
+      target = threshold.is_a?(Band) ? threshold : Band.parse(threshold.to_s)
+      band.at_least?(target)
+    end
+
+    # EPSS as a percentage in `[0.0, 100.0]`. Pure display helper —
+    # downstream tooling almost always renders the value multiplied by
+    # 100, and doing it inline reads better than open-coding `* 100`.
+    def percentage : Float64
+      @epss * 100.0
+    end
+
+    # Percentile rank rendered as a percentage in `[0.0, 100.0]`.
+    def percentile_percentage : Float64
+      @percentile * 100.0
+    end
+
+    # Age of this snapshot relative to `now`. Returns `nil` when the
+    # score has no associated date (e.g. CSV rows without per-row dates
+    # before the feed metadata was attached).
+    def age(now : Time = Time.utc) : Time::Span?
+      d = @date
+      return nil unless d
+      now - d
+    end
+
+    # Difference in EPSS probability against `other`, in the direction
+    # `other → self` (positive when this score is higher). Useful for
+    # daily-delta dashboards comparing two snapshots of the same CVE.
+    def delta(other : Score) : Float64
+      @epss - other.epss
+    end
+
     def <=>(other : Score) : Int32?
       @epss <=> other.epss
     end

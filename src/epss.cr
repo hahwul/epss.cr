@@ -76,4 +76,56 @@ module EPSS
   def self.scores(cves : Enumerable(String), *, date : Time? = nil) : Array(Score)
     client.scores(cves, date: date)
   end
+
+  # Convenience: just the `EPSS::Band` for one CVE. Returns `nil` when
+  # the API has no published score.
+  def self.band(cve : String) : Band?
+    score(cve).try(&.band)
+  end
+
+  # Convenience: just the EPSS probability for one CVE.
+  def self.epss(cve : String) : Float64?
+    score(cve).try(&.epss)
+  end
+
+  # Convenience: just the percentile rank for one CVE.
+  def self.percentile(cve : String) : Float64?
+    score(cve).try(&.percentile)
+  end
+
+  # Top-N highest-EPSS CVEs across the entire population.
+  #
+  # ```
+  # EPSS.top(10).each { |s| puts s }
+  # ```
+  def self.top(n : Int32) : Array(Score)
+    client.fetch(Query.top(n)).scores
+  end
+
+  # CVEs whose EPSS probability is strictly above `threshold`. Streams
+  # all matching pages through the API and materializes them into an
+  # array. Be aware that loose thresholds produce large result sets;
+  # use `EPSS.client.each_score(Query.above(...))` directly to stream.
+  def self.above(threshold : Float64 = 0.95) : Array(Score)
+    client.all_scores(Query.above(threshold))
+  end
+
+  # Free-text search ordered by EPSS descending.
+  def self.search(text : String, *, limit : Int32 = 100) : Array(Score)
+    client.fetch(Query.search(text).with_limit(limit)).scores
+  end
+
+  # Download the daily CSV feed for `date`. Equivalent to
+  # `EPSS::CSV.fetch(date)`; provided at module scope so callers don't
+  # need to remember the submodule path.
+  def self.feed(date : Time) : CSV::Feed
+    client.fetch_feed(date)
+  end
+
+  # Download today's UTC feed. The feed is published once per day; if
+  # called before the day's file has been minted the request will
+  # surface as `EPSS::APIError` with a 404 status.
+  def self.today_feed : CSV::Feed
+    feed(Time.utc)
+  end
 end

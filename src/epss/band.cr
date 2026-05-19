@@ -62,5 +62,34 @@ module EPSS
       else              Critical
       end
     end
+
+    # Parse a case-insensitive band name. Accepts the labels emitted by
+    # `#to_s` so user-supplied CLI flags or config values round-trip
+    # without manual normalization.
+    #
+    # ```
+    # EPSS::Band.parse("critical") # => EPSS::Band::Critical
+    # EPSS::Band.parse?("nope")    # => nil
+    # ```
+    def self.parse(value : String) : Band
+      parse?(value) || raise ParseError.new("unknown band: #{value.inspect}")
+    end
+
+    def self.parse?(value : String) : Band?
+      case value.strip.downcase
+      when "none"     then None
+      when "low"      then Low
+      when "medium"   then Medium
+      when "high"     then High
+      when "critical" then Critical
+      end
+    end
+
+    # `true` when this band is at least as severe as `other`. Crystal's
+    # enum already orders these by declaration; this alias makes the
+    # intent obvious at call sites (`score.band.at_least?(:high)`).
+    def at_least?(other : Band) : Bool
+      self.value >= other.value
+    end
   end
 end

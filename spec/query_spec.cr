@@ -89,12 +89,46 @@ describe EPSS::Query do
     end
   end
 
+  describe "class-method factories" do
+    it "Query.for_cve / for_cves build CVE-filtered queries" do
+      EPSS::Query.for_cve("cve-1").cves.should eq(["CVE-1"])
+      EPSS::Query.for_cves(["a", "b"]).cves.should eq(["A", "B"])
+    end
+
+    it "Query.top sorts descending with a limit" do
+      q = EPSS::Query.top(10)
+      q.order.should eq("!epss")
+      q.limit.should eq(10)
+    end
+
+    it "Query.above / below set threshold filters" do
+      EPSS::Query.above.epss_gt.should eq(0.95)
+      EPSS::Query.above(0.7).epss_gt.should eq(0.7)
+      EPSS::Query.below(0.01).epss_lt.should eq(0.01)
+    end
+
+    it "Query.search sets q + ordering" do
+      q = EPSS::Query.search("openssl")
+      q.q.should eq("openssl")
+      q.order.should eq("!epss")
+    end
+
+    it "Query.recent sets days" do
+      EPSS::Query.recent(7).days.should eq(7)
+    end
+  end
+
   describe "with_* derivation" do
     it "returns a new instance" do
       q = EPSS::Query.new(cves: ["CVE-1"])
       q2 = q.with_limit(50)
       q.limit.should be_nil
       q2.limit.should eq(50)
+    end
+
+    it "with_cve replaces with a single id" do
+      q = EPSS::Query.new(cves: ["CVE-1", "CVE-2"]).with_cve("CVE-3")
+      q.cves.should eq(["CVE-3"])
     end
 
     it "covers the full parameter surface" do
