@@ -15,8 +15,8 @@ module EPSS
     getter status : Int32?
     getter body : String?
 
-    def initialize(message : String, @status : Int32? = nil, @body : String? = nil)
-      super(message)
+    def initialize(message : String, @status : Int32? = nil, @body : String? = nil, cause : Exception? = nil)
+      super(message, cause)
     end
   end
 end

@@ -29,12 +29,76 @@ describe EPSS::Client do
       headers["User-Agent"].should match(/epss\.cr/)
     end
 
-    it "raises APIError on a non-2xx response" do
+    it "raises APIError on a non-2xx response with status + body populated" do
       stub = StubTransport.from_body("bad request", status: 400)
       client = EPSS::Client.new(transport: stub, max_retries: 0)
-      expect_raises(EPSS::APIError, /400/) do
+      begin
         client.fetch
+        fail "should have raised"
+      rescue ex : EPSS::APIError
+        ex.status.should eq(400)
+        ex.body.should eq("bad request")
+        ex.message.not_nil!.should contain("400")
       end
+    end
+
+    it "honors Retry-After header (seconds) on 429" do
+      attempts = 0
+      slept = false
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        attempts += 1
+        if attempts == 1
+          slept = false
+          headers = HTTP::Headers{"Retry-After" => "1"}
+          HTTP::Client::Response.new(429, body: "", headers: headers)
+        else
+          HTTP::Client::Response.new(200, body: fixture_envelope(
+            [{cve: "CVE-1", epss: "0.1", percentile: "0.5", date: "2026-05-18"}]
+          ))
+        end
+      }
+      client = EPSS::Client.new(transport: stub, max_retries: 2, retry_backoff: 10.seconds)
+      start = Time.instant
+      client.fetch
+      elapsed = Time.instant - start
+      # Retry-After=1 should have been used (≤2s) instead of 10s base backoff.
+      elapsed.should be < 5.seconds
+      attempts.should eq(2)
+    end
+
+    it "retries 429 (rate-limit) like 5xx" do
+      attempts = 0
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        attempts += 1
+        if attempts < 3
+          HTTP::Client::Response.new(429, body: "slow down")
+        else
+          HTTP::Client::Response.new(200, body: fixture_envelope([
+            {cve: "CVE-1", epss: "0.1", percentile: "0.5", date: "2026-05-18"},
+          ]))
+        end
+      }
+      client = EPSS::Client.new(transport: stub, max_retries: 5, retry_backoff: 1.millisecond)
+      client.fetch.scores.first.cve.should eq("CVE-1")
+      attempts.should eq(3)
+    end
+
+    it "retries transport IO errors then surfaces APIError preserving cause" do
+      attempts = 0
+      cause_ex = IO::TimeoutError.new("read timeout")
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        attempts += 1
+        raise cause_ex
+      }
+      client = EPSS::Client.new(transport: stub, max_retries: 2, retry_backoff: 1.millisecond)
+      begin
+        client.fetch
+        fail "should have raised"
+      rescue ex : EPSS::APIError
+        ex.cause.should eq(cause_ex)
+        ex.message.not_nil!.should contain("read timeout")
+      end
+      attempts.should eq(3)
     end
 
     it "retries on 5xx responses then surfaces APIError" do
@@ -109,6 +173,41 @@ describe EPSS::Client do
     end
   end
 
+  describe "#time_series" do
+    it "flattens the nested time-series array into one Score per day" do
+      payload = <<-JSON
+        {
+          "status": "OK", "status-code": 200, "version": "1.0", "access": "public",
+          "total": 1, "offset": 0, "limit": 100,
+          "data": [{
+            "cve": "CVE-2022-27225",
+            "epss": "0.001870000",
+            "percentile": "0.401290000",
+            "date": "2026-05-18",
+            "time-series": [
+              {"epss": "0.001870000", "percentile": "0.401770000", "date": "2026-05-17"},
+              {"epss": "0.001870000", "percentile": "0.401890000", "date": "2026-05-16"}
+            ]
+          }]
+        }
+        JSON
+      client = EPSS::Client.new(transport: StubTransport.from_body(payload))
+      series = client.time_series("CVE-2022-27225")
+      series.size.should eq(3)
+      series.map { |s| s.date.not_nil!.to_s("%Y-%m-%d") }.should eq([
+        "2026-05-16", "2026-05-17", "2026-05-18",
+      ])
+      series.all? { |s| s.cve == "CVE-2022-27225" }.should be_true
+    end
+
+    it "sends scope=time-series in the query string" do
+      empty = fixture_envelope([] of NamedTuple(cve: String, epss: String, percentile: String, date: String))
+      stub = StubTransport.from_body(empty)
+      EPSS::Client.new(transport: stub).time_series("CVE-1")
+      stub.requests.first[0].query.not_nil!.should contain("scope=time-series")
+    end
+  end
+
   describe "#each_score (pagination)" do
     it "follows the offset/total cursor until exhaustion" do
       page1 = fixture_envelope(
@@ -143,6 +242,37 @@ describe EPSS::Client do
       uri.host.should eq("api.first.org")
       uri.path.should eq("/data/v1/epss")
       uri.query.not_nil!.should contain("cve=CVE-1")
+    end
+  end
+end
+
+describe EPSS::Response do
+  describe "#more?" do
+    it "is true when offset + size < total" do
+      payload = fixture_envelope(
+        [{cve: "CVE-1", epss: "0.1", percentile: "0.5", date: "2026-05-18"}],
+        total: 10,
+        offset: 0,
+        limit: 1,
+      )
+      EPSS::Response.from_json(payload).more?.should be_true
+    end
+
+    it "is false on the final page" do
+      payload = fixture_envelope(
+        [{cve: "CVE-1", epss: "0.1", percentile: "0.5", date: "2026-05-18"}],
+        total: 1,
+        offset: 0,
+        limit: 1,
+      )
+      EPSS::Response.from_json(payload).more?.should be_false
+    end
+  end
+
+  it "rejects an envelope reporting an error status" do
+    payload = %({"status":"error","status-code":500,"message":"boom","version":"1.0","access":"public","total":0,"offset":0,"limit":100,"data":[]})
+    expect_raises(EPSS::APIError, /boom/) do
+      EPSS::Response.from_json(payload)
     end
   end
 end

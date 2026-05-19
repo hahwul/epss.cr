@@ -1,4 +1,6 @@
 require "http/client"
+require "openssl"
+require "socket"
 require "uri"
 require "./query"
 require "./response"
@@ -88,6 +90,20 @@ module EPSS
       fetch(query).scores.first?
     end
 
+    # Fetch the full 30-day EPSS time-series for one CVE. Returns a flat
+    # list of `Score`s — one per day, sorted oldest-first.
+    #
+    # ```
+    # series = client.time_series("CVE-2022-27225")
+    # series.first.date # => 30 days ago
+    # series.last.date  # => today (or most recent publication)
+    # ```
+    def time_series(cve : String) : Array(Score)
+      query = Query.new(cves: [cve], scope: "time-series")
+      scores = fetch(query).scores
+      scores.sort_by { |s| s.date || Time.unix(0) }
+    end
+
     # Look up multiple CVEs in one call. The API caps the URL length, so
     # this helper batches into chunks of `batch_size` (default 100) and
     # concatenates the results.
@@ -113,9 +129,12 @@ module EPSS
         page_query = query.with_offset(offset).with_limit(page_size)
         resp = fetch(page_query)
         resp.scores.each { |score| yield score }
+        # Advance by the *server-reported* row count, not the flattened
+        # score count — `scope=time-series` inflates each row into ~30
+        # daily entries, which would otherwise skip pages.
+        break if resp.row_count == 0
         break unless resp.more?
-        break if resp.scores.empty?
-        offset += resp.scores.size
+        offset += resp.row_count
       end
     end
 
@@ -143,7 +162,6 @@ module EPSS
       }
 
       attempt = 0
-      last_error : Exception? = nil
 
       loop do
         attempt += 1
@@ -160,7 +178,13 @@ module EPSS
                 body: response.body,
               )
             end
-            sleep_backoff(attempt)
+            # 429 / 503 may include a `Retry-After` header; honor it
+            # instead of our exponential backoff when present.
+            if (hint = retry_after_delay(response.headers))
+              sleep hint
+            else
+              sleep_backoff(attempt)
+            end
           else
             raise APIError.new(
               "EPSS API request failed: HTTP #{response.status_code}",
@@ -170,13 +194,37 @@ module EPSS
           end
         rescue ex : APIError
           raise ex
-        rescue ex : IO::Error | Socket::Error
-          last_error = ex
+        rescue ex : IO::Error | Socket::Error | OpenSSL::SSL::Error
+          # IO::TimeoutError descends from IO::Error, so it's covered here.
           if attempt > @max_retries
-            raise APIError.new("EPSS API request failed: #{ex.message}")
+            raise APIError.new("EPSS API request failed: #{ex.message}", cause: ex)
           end
           sleep_backoff(attempt)
         end
+      end
+    end
+
+    # Parse a Retry-After response header. Supports both the seconds form
+    # (`Retry-After: 30`) and the HTTP-date form (`Retry-After: Wed, 21 Oct
+    # 2015 07:28:00 GMT`). Returns nil if absent, unparseable, or negative.
+    private def retry_after_delay(headers : HTTP::Headers) : Time::Span?
+      raw = headers["Retry-After"]?
+      return nil unless raw
+      raw = raw.strip
+      if seconds = raw.to_i?
+        return nil if seconds < 0
+        # Cap at one minute so a misbehaving server can't strand a fiber.
+        capped = seconds.clamp(0, 60)
+        return capped.seconds
+      end
+      begin
+        target = HTTP.parse_time(raw)
+        return nil unless target
+        delta = target - Time.utc
+        return nil if delta.negative?
+        delta < 60.seconds ? delta : 60.seconds
+      rescue
+        nil
       end
     end
 

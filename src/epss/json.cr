@@ -53,8 +53,6 @@ module EPSS
       Response.from_json(input).scores
     elsif obj.has_key?("cve")
       [score_from_object(obj)]
-    elsif (arr = obj["scores"]?) && arr.as_a?
-      arr.as_a.map { |node| score_from_object(node.as_h? || raise ParseError.new("non-object in scores array")) }
     else
       raise ParseError.new("JSON has neither a 'data' envelope nor a 'cve' key")
     end

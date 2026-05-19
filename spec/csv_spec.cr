@@ -51,6 +51,26 @@ describe EPSS::CSV do
       end
     end
 
+    it "accepts a Path pointing at a CSV file on disk" do
+      csv = "cve,epss,percentile\nCVE-1,0.1,0.5\n"
+      path = File.tempfile("epss-feed", ".csv") do |f|
+        f.print csv
+      end
+      begin
+        feed = EPSS::CSV.parse(Path.new(path.path))
+        feed.scores.first.cve.should eq("CVE-1")
+      ensure
+        path.delete
+      end
+    end
+
+    it "raises on a row that's shorter than the header" do
+      csv = "cve,epss,percentile\nCVE-1,0.1\n"
+      expect_raises(EPSS::ParseError, /columns/) do
+        EPSS::CSV.parse(csv)
+      end
+    end
+
     it "auto-detects gzip input" do
       raw = <<-CSV
         #model_version:v2025.03.14,score_date:2026-05-18T00:00:00+0000

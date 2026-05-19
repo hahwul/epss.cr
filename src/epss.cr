@@ -33,22 +33,30 @@ require "./epss/json"
 
 module EPSS
   @@default_client : Client?
+  @@default_client_mutex = Mutex.new
 
   # Lazily-constructed default `Client` used by the module-level convenience
   # helpers. Override via `EPSS.client=` to inject a configured client or a
-  # stub during tests.
+  # stub during tests. The mutex protects against duplicate construction
+  # when multiple fibers race the first call.
   def self.client : Client
-    @@default_client ||= Client.new
+    if c = @@default_client
+      return c
+    end
+    @@default_client_mutex.synchronize do
+      @@default_client ||= Client.new
+    end
   end
 
   def self.client=(client : Client) : Client
-    @@default_client = client
+    @@default_client_mutex.synchronize { @@default_client = client }
+    client
   end
 
   # Reset the cached default client. Mainly useful after replacing
   # transport/base URI in tests.
   def self.reset_client : Nil
-    @@default_client = nil
+    @@default_client_mutex.synchronize { @@default_client = nil }
   end
 
   # Convenience: look up the latest EPSS score for one CVE.

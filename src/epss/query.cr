@@ -12,7 +12,10 @@ module EPSS
   # exposed publicly so consumers can build URLs without going through
   # the HTTP client (useful for caching layers and offline tooling).
   struct Query
-    # CVE IDs to filter on. The API joins them with `,` server-side.
+    # CVE IDs to filter on. Normalized to upper-case at construction so
+    # comparisons against `query.cves` are predictable; the FIRST API
+    # itself is case-insensitive on CVE ids. The list is joined with `,`
+    # at request time.
     getter cves : Array(String)
 
     # Specific publication date to query historical scores for.
@@ -133,9 +136,7 @@ module EPSS
     end
 
     private def format_float(value : Float64) : String
-      # Strip trailing zeros so "0.95" stays "0.95" rather than "0.95000000".
-      s = value.to_s
-      s
+      value.to_s
     end
 
     private def copy(

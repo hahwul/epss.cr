@@ -115,8 +115,9 @@ module EPSS
       when Nil    then nil
       when Time   then value
       when String
-        return nil if value.empty?
-        Time.parse(value, "%Y-%m-%d", Time::Location::UTC)
+        stripped = value.strip
+        return nil if stripped.empty?
+        Time.parse(stripped, "%Y-%m-%d", Time::Location::UTC)
       else
         raise ParseError.new("invalid date value '#{value}'")
       end
