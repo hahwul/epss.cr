@@ -57,6 +57,33 @@ describe EPSS do
     end
   end
 
+  describe "EPSS::Response#to_json" do
+    it "round-trips an envelope payload back through the parser" do
+      payload = fixture_envelope([
+        {cve: "CVE-1", epss: "0.100000000", percentile: "0.500000000", date: "2026-05-18"},
+        {cve: "CVE-2", epss: "0.200000000", percentile: "0.600000000", date: "2026-05-18"},
+      ], total: 2, offset: 0, limit: 100)
+      resp = EPSS::Response.from_json(payload)
+      reparsed = EPSS::Response.from_json(resp.to_json)
+      reparsed.total.should eq(resp.total)
+      reparsed.scores.map(&.cve).should eq(resp.scores.map(&.cve))
+      reparsed.scores.map(&.epss).should eq(resp.scores.map(&.epss))
+    end
+  end
+
+  describe "EPSS::Score.from_json" do
+    it "parses one bare row into a single Score" do
+      json = %({"cve": "CVE-1", "epss": "0.1", "percentile": "0.5", "date": "2026-05-18"})
+      score = EPSS::Score.from_json(json)
+      score.cve.should eq("CVE-1")
+      score.epss.should eq(0.1)
+    end
+
+    it "returns nil on malformed input via from_json?" do
+      EPSS::Score.from_json?("bad").should be_nil
+    end
+  end
+
   describe "module-level convenience" do
     after_each { EPSS.reset_client }
 

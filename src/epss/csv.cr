@@ -1,6 +1,5 @@
 require "csv"
 require "compress/gzip"
-require "http/client"
 require "./score"
 
 module EPSS
@@ -42,25 +41,18 @@ module EPSS
       URI.parse("https://#{host}/epss_scores-#{date.to_s("%Y-%m-%d")}.csv.gz")
     end
 
-    # Download and parse the daily feed for `date` in one shot. Streams
-    # the gzipped body through `Compress::Gzip::Reader` so the full
-    # 240k+ row file never lands in memory.
+    # Download and parse the daily feed for `date`. Delegates to
+    # `EPSS.client.fetch_feed`, which routes the request through the
+    # client's transport, retry, and timeout pipeline. To inject a stub
+    # transport or use a non-default base, call `client.fetch_feed`
+    # directly.
     #
     # ```
     # feed = EPSS::CSV.fetch(Time.utc(2026, 5, 18))
     # feed.scores.size # => 240000+
     # ```
     def fetch(date : Time, *, host : String = FEED_HOST) : Feed
-      uri = feed_url(date, host: host)
-      response = HTTP::Client.get(uri)
-      unless response.status_code == 200
-        raise APIError.new(
-          "EPSS feed download failed: HTTP #{response.status_code}",
-          status: response.status_code,
-          body: response.body,
-        )
-      end
-      parse(IO::Memory.new(response.body))
+      EPSS.client.fetch_feed(date, host: host)
     end
 
     # Metadata pulled from the leading `#` header of an EPSS feed file.

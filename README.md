@@ -80,16 +80,38 @@ feed.scores.size            # => 240000+
 EPSS::CSV.feed_url(Time.utc(2026, 5, 18))
 # => URI("https://epss.empiricalsecurity.com/epss_scores-2026-05-18.csv.gz")
 
+# Routed through the same retry/timeout/User-Agent pipeline as the JSON
+# client — slow networks surface as EPSS::APIError rather than hangs.
 feed = EPSS::CSV.fetch(Time.utc(2026, 5, 18))
 feed.metadata.score_date    # => Time(2026-05-18)
 ```
 
+### Field projection
+
+Request a partial payload via the FIRST API's `fields` parameter to skip
+percentile/date when the caller doesn't need them:
+
+```crystal
+query = EPSS::Query.new
+  .with_epss_gt(0.95)
+  .with_order("!epss")
+  .with_fields(["cve", "epss"])
+```
+
+`Query` also exposes `with_pretty(true)` and `with_envelope(false)` for
+the other FIRST global parameters.
+
 ### JSON round-trip
 
 ```crystal
+# Single Score
 score = EPSS::Score.new("CVE-2022-27225", 0.001870, 0.401290, Time.utc(2026, 5, 18))
-json = score.to_json
-EPSS.from_json(json).first # => structurally equal Score
+EPSS::Score.from_json(score.to_json).should eq(score)
+
+# Full API envelope
+resp     = client.fetch(EPSS::Query.new(cves: ["CVE-2022-27225"]))
+captured = resp.to_json
+EPSS::Response.from_json(captured) # round-trips
 ```
 
 ### Bands

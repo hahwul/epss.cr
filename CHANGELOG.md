@@ -12,6 +12,13 @@
   and download the daily feed by date; switch the canonical feed host
   to `epss.empiricalsecurity.com` and accept the legacy
   `epss.cyentia.com` host via the `host:` override.
+- Add `EPSS::Client#fetch_feed(date)` so daily-feed downloads share the
+  client's retry, timeout, transport, and User-Agent configuration.
+  `EPSS::CSV.fetch` now delegates here, which also makes it stubable
+  through `EPSS::Transport`.
+- Add `EPSS::Response#to_json` so envelope payloads round-trip through
+  the same parser, and `EPSS::Score.from_json` / `from_json?` for the
+  single-row case.
 
 ## v0.1.0
 

@@ -1,7 +1,7 @@
 # Parse the daily EPSS CSV feed and print the top-N highest-probability
 # CVEs. Accepts either a local file (auto-detects gzip) or stdin.
 #
-#     curl -sL https://epss.cyentia.com/epss_scores-current.csv.gz \
+#     curl -sL https://epss.empiricalsecurity.com/epss_scores-current.csv.gz \
 #       | crystal run examples/feed.cr -- 20
 require "../src/epss"
 

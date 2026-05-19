@@ -34,11 +34,48 @@ module EPSS
       end
     end
 
+    # Parse a single bare-row JSON object (`{"cve": ..., "epss": ...}`)
+    # into one `Score`. For full envelope payloads use `Response.from_json`.
+    def self.from_json(input : String | IO) : Score
+      scores = EPSS.from_json(input)
+      raise ParseError.new("expected one score, got #{scores.size}") if scores.size != 1
+      scores.first
+    end
+
+    def self.from_json?(input : String | IO) : Score?
+      from_json(input)
+    rescue Error | ::JSON::ParseException
+      nil
+    end
+
     # EPSS publishes probabilities to nine decimal places. Use the same
     # precision so a round-trip through JSON is byte-identical for any
     # value originally sourced from FIRST.
     private def format_probability(value : Float64) : String
       "%.9f" % value
+    end
+  end
+
+  struct Response
+    # Serialize this response back into the FIRST EPSS envelope shape.
+    # Symmetric with `Response.from_json` — capture an API payload,
+    # write it to disk for fixture use, then replay it through the same
+    # parser without modification.
+    def to_json(json : ::JSON::Builder) : Nil
+      json.object do
+        json.field "status", @status
+        json.field "status-code", @status_code
+        json.field "version", @version
+        json.field "access", @access
+        json.field "total", @total
+        json.field "offset", @offset
+        json.field "limit", @limit
+        json.field "data" do
+          json.array do
+            @scores.each { |s| s.to_json(json) }
+          end
+        end
+      end
     end
   end
 

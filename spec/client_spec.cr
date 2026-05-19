@@ -235,6 +235,43 @@ describe EPSS::Client do
     end
   end
 
+  describe "#fetch_feed" do
+    it "downloads, gzip-decodes, and parses the daily feed via Transport" do
+      csv_body = <<-CSV
+        #model_version:v2025.03.14,score_date:2026-05-18T00:00:00+0000
+        cve,epss,percentile
+        CVE-1,0.10,0.50
+        CVE-2,0.20,0.60
+        CSV
+      gzipped = IO::Memory.new
+      Compress::Gzip::Writer.open(gzipped) { |gz| gz.print csv_body }
+      gzipped.rewind
+      stub = StubTransport.from_body(gzipped.to_s)
+      client = EPSS::Client.new(transport: stub)
+
+      feed = client.fetch_feed(Time.utc(2026, 5, 18))
+      feed.scores.size.should eq(2)
+      feed.metadata.model_version.should eq("v2025.03.14")
+      stub.requests.first[0].host.should eq("epss.empiricalsecurity.com")
+      stub.requests.first[0].path.should eq("/epss_scores-2026-05-18.csv.gz")
+    end
+
+    it "honors the legacy host override" do
+      stub = StubTransport.from_body("cve,epss,percentile\nCVE-1,0.1,0.5\n")
+      client = EPSS::Client.new(transport: stub)
+      client.fetch_feed(Time.utc(2026, 5, 18), host: "epss.cyentia.com")
+      stub.requests.first[0].host.should eq("epss.cyentia.com")
+    end
+
+    it "raises APIError when the feed host returns non-200" do
+      stub = StubTransport.from_body("not found", status: 404)
+      client = EPSS::Client.new(transport: stub, max_retries: 0)
+      expect_raises(EPSS::APIError, /404/) do
+        client.fetch_feed(Time.utc(2026, 5, 18))
+      end
+    end
+  end
+
   describe "#build_uri" do
     it "merges the query string into the base URI" do
       client = EPSS::Client.new(transport: StubTransport.from_body("{}"))

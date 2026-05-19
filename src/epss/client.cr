@@ -2,6 +2,7 @@ require "http/client"
 require "openssl"
 require "socket"
 require "uri"
+require "./csv"
 require "./query"
 require "./response"
 require "./version"
@@ -145,6 +146,22 @@ module EPSS
       result = [] of Score
       each_score(query, page_size: page_size) { |score| result << score }
       result
+    end
+
+    # Download and parse the daily EPSS feed for `date` using this client's
+    # transport, retry policy, User-Agent, and timeouts. The feed is the
+    # second canonical EPSS distribution channel; routing it through the
+    # same pipeline as the JSON API means a slow network surfaces as
+    # `APIError` instead of an unbounded hang.
+    #
+    # ```
+    # feed = client.fetch_feed(Time.utc(2026, 5, 18))
+    # feed.scores.size # => 240000+
+    # ```
+    def fetch_feed(date : Time, *, host : String = CSV::FEED_HOST) : CSV::Feed
+      uri = CSV.feed_url(date, host: host)
+      raw = perform_get(uri)
+      CSV.parse(IO::Memory.new(raw))
     end
 
     # Compose the absolute URI for a query against this client's base.
