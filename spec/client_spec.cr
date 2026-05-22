@@ -161,9 +161,9 @@ describe EPSS::Client do
         counter += 1
         query = uri.query.not_nil!
         cve_param = URI::Params.parse(query)["cve"]
-        rows = cve_param.split(",").map { |c|
+        rows = cve_param.split(",").map do |c|
           {cve: c, epss: "0.1", percentile: "0.5", date: "2026-05-18"}
-        }
+        end
         HTTP::Client::Response.new(200, body: fixture_envelope(rows))
       }
       client = EPSS::Client.new(transport: stub)
@@ -194,7 +194,7 @@ describe EPSS::Client do
       client = EPSS::Client.new(transport: StubTransport.from_body(payload))
       series = client.time_series("CVE-2022-27225")
       series.size.should eq(3)
-      series.map { |s| s.date.not_nil!.to_s("%Y-%m-%d") }.should eq([
+      series.map(&.date.not_nil!.to_s("%Y-%m-%d")).should eq([
         "2026-05-16", "2026-05-17", "2026-05-18",
       ])
       series.all? { |s| s.cve == "CVE-2022-27225" }.should be_true
@@ -244,7 +244,7 @@ describe EPSS::Client do
         CVE-2,0.20,0.60
         CSV
       gzipped = IO::Memory.new
-      Compress::Gzip::Writer.open(gzipped) { |gz| gz.print csv_body }
+      Compress::Gzip::Writer.open(gzipped, &.print(csv_body))
       gzipped.rewind
       stub = StubTransport.from_body(gzipped.to_s)
       client = EPSS::Client.new(transport: stub)
