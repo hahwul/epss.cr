@@ -216,15 +216,33 @@ module EPSS
       if days = @days
         params << {"days", days.to_s}
       end
-      params << {"epss-gt", format_float(@epss_gt.not_nil!)} unless @epss_gt.nil?
-      params << {"epss-lt", format_float(@epss_lt.not_nil!)} unless @epss_lt.nil?
-      params << {"percentile-gt", format_float(@percentile_gt.not_nil!)} unless @percentile_gt.nil?
-      params << {"percentile-lt", format_float(@percentile_lt.not_nil!)} unless @percentile_lt.nil?
-      params << {"q", @q.not_nil!} unless @q.nil?
-      params << {"scope", @scope.not_nil!} unless @scope.nil?
-      params << {"order", @order.not_nil!} unless @order.nil?
-      params << {"offset", @offset.not_nil!.to_s} unless @offset.nil?
-      params << {"limit", @limit.not_nil!.to_s} unless @limit.nil?
+      if v = @epss_gt
+        params << {"epss-gt", format_float(v)}
+      end
+      if v = @epss_lt
+        params << {"epss-lt", format_float(v)}
+      end
+      if v = @percentile_gt
+        params << {"percentile-gt", format_float(v)}
+      end
+      if v = @percentile_lt
+        params << {"percentile-lt", format_float(v)}
+      end
+      if v = @q
+        params << {"q", v}
+      end
+      if v = @scope
+        params << {"scope", v}
+      end
+      if v = @order
+        params << {"order", v}
+      end
+      if v = @offset
+        params << {"offset", v.to_s}
+      end
+      if v = @limit
+        params << {"limit", v.to_s}
+      end
       if f = @fields
         params << {"fields", f.join(',')} unless f.empty?
       end

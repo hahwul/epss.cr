@@ -168,9 +168,9 @@ module EPSS
         unless saw_header
           headers = line.split(',').map(&.strip.downcase)
           validate_headers(headers)
-          cve_idx = headers.index("cve").not_nil!
-          epss_idx = headers.index("epss").not_nil!
-          percentile_idx = headers.index("percentile").not_nil!
+          cve_idx = headers.index!("cve")
+          epss_idx = headers.index!("epss")
+          percentile_idx = headers.index!("percentile")
           date_idx = headers.index("date") || -1
           saw_header = true
           next
@@ -214,7 +214,7 @@ module EPSS
     end
 
     private def parse_metadata_date(value : String?) : Time?
-      return nil if value.nil? || value.empty?
+      return if value.nil? || value.empty?
       str = value
       # The feed emits an ISO-8601 timestamp like "2026-05-18T00:00:00+0000".
       begin

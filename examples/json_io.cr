@@ -29,6 +29,6 @@ envelope = <<-JSON
   }
   JSON
 
-EPSS.from_json(envelope).sort.reverse.each do |s|
+EPSS.from_json(envelope).sort.reverse!.each do |s|
   puts "#{s.cve} epss=#{s.epss} band=#{s.band}"
 end

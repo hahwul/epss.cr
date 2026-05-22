@@ -197,7 +197,7 @@ module EPSS
             end
             # 429 / 503 may include a `Retry-After` header; honor it
             # instead of our exponential backoff when present.
-            if (hint = retry_after_delay(response.headers))
+            if hint = retry_after_delay(response.headers)
               sleep hint
             else
               sleep_backoff(attempt)
@@ -226,19 +226,19 @@ module EPSS
     # 2015 07:28:00 GMT`). Returns nil if absent, unparseable, or negative.
     private def retry_after_delay(headers : HTTP::Headers) : Time::Span?
       raw = headers["Retry-After"]?
-      return nil unless raw
+      return unless raw
       raw = raw.strip
       if seconds = raw.to_i?
-        return nil if seconds < 0
+        return if seconds < 0
         # Cap at one minute so a misbehaving server can't strand a fiber.
         capped = seconds.clamp(0, 60)
         return capped.seconds
       end
       begin
         target = HTTP.parse_time(raw)
-        return nil unless target
+        return unless target
         delta = target - Time.utc
-        return nil if delta.negative?
+        return if delta.negative?
         delta < 60.seconds ? delta : 60.seconds
       rescue
         nil

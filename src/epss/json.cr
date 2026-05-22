@@ -72,7 +72,7 @@ module EPSS
         json.field "limit", @limit
         json.field "data" do
           json.array do
-            @scores.each { |s| s.to_json(json) }
+            @scores.each(&.to_json(json))
           end
         end
       end

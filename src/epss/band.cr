@@ -89,7 +89,7 @@ module EPSS
     # enum already orders these by declaration; this alias makes the
     # intent obvious at call sites (`score.band.at_least?(:high)`).
     def at_least?(other : Band) : Bool
-      self.value >= other.value
+      value >= other.value
     end
   end
 end

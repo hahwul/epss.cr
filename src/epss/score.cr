@@ -50,10 +50,10 @@ module EPSS
       Band.from_percentile(@percentile)
     end
 
-    {% for name in %w(none low medium high critical) %}
-      # `true` when this score's EPSS-band equals `Band::{{name.id.camelcase}}`.
-      def {{name.id}}? : Bool
-        band == Band::{{name.id.camelcase}}
+    {% for name in %w[none low medium high critical] %}
+      # `true` when this score's EPSS-band equals `Band::{{ name.id.camelcase }}`.
+      def {{ name.id }}? : Bool
+        band == Band::{{ name.id.camelcase }}
       end
     {% end %}
 
@@ -87,7 +87,7 @@ module EPSS
     # before the feed metadata was attached).
     def age(now : Time = Time.utc) : Time::Span?
       d = @date
-      return nil unless d
+      return unless d
       now - d
     end
 
@@ -164,7 +164,7 @@ module EPSS
       when Time then value
       when String
         stripped = value.strip
-        return nil if stripped.empty?
+        return if stripped.empty?
         Time.parse(stripped, "%Y-%m-%d", Time::Location::UTC)
       else
         raise ParseError.new("invalid date value '#{value}'")
