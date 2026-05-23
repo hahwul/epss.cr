@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.0
 
 - Expose the FIRST API global parameters `fields`, `pretty`, and
   `envelope` on `EPSS::Query`.
