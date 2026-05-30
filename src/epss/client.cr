@@ -60,6 +60,11 @@ module EPSS
     DEFAULT_BASE_URI   = URI.parse("https://api.first.org/data/v1/epss")
     DEFAULT_USER_AGENT = "epss.cr/#{EPSS::VERSION} (+https://github.com/hahwul/epss.cr)"
 
+    # Upper bound for a single exponential-backoff sleep. Without a cap the
+    # doubling delay grows unbounded and can strand a fiber for minutes; 30s
+    # is plenty to let a transient outage clear.
+    MAX_BACKOFF = 30.seconds
+
     getter base_uri : URI
     getter user_agent : String
     getter max_retries : Int32
@@ -246,9 +251,27 @@ module EPSS
     end
 
     private def sleep_backoff(attempt : Int32) : Nil
-      # Exponential backoff: base * 2^(attempt-1)
-      delay = @retry_backoff * (1 << (attempt - 1))
-      sleep delay
+      sleep backoff_delay(attempt)
+    end
+
+    # Exponential backoff with a hard cap and decorrelated jitter:
+    #   base * 2^(attempt-1), clamped to MAX_BACKOFF, plus up to 10% jitter.
+    #
+    # The cap keeps a long retry chain from sleeping for minutes, and the
+    # jitter spreads concurrent retries so they don't all wake at once. This
+    # is library runtime code (not a deterministic workflow script), so a
+    # random source is acceptable here.
+    #
+    # Public so the cap/jitter bounds can be unit-tested without sleeping.
+    def backoff_delay(attempt : Int32) : Time::Span
+      shift = attempt - 1
+      # Guard against `1 << n` overflow for large attempt counts before the
+      # cap is even applied.
+      factor = shift >= 30 ? (1_i64 << 30) : (1_i64 << shift)
+      base = @retry_backoff * factor
+      capped = base < MAX_BACKOFF ? base : MAX_BACKOFF
+      jitter = capped * (rand * 0.1)
+      capped + jitter
     end
   end
 end

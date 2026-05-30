@@ -281,6 +281,49 @@ describe EPSS::Client do
       uri.query.not_nil!.should contain("cve=CVE-1")
     end
   end
+
+  describe "#backoff_delay" do
+    it "grows exponentially for small attempt counts" do
+      client = EPSS::Client.new(
+        transport: StubTransport.from_body("{}"),
+        retry_backoff: 1.second,
+      )
+      # base * 2^(attempt-1): 1s, 2s, 4s (plus <=10% jitter each).
+      client.backoff_delay(1).should be >= 1.second
+      client.backoff_delay(2).should be >= 2.seconds
+      client.backoff_delay(3).should be >= 4.seconds
+    end
+
+    it "caps the delay at MAX_BACKOFF (plus jitter) and never grows unbounded" do
+      client = EPSS::Client.new(
+        transport: StubTransport.from_body("{}"),
+        retry_backoff: 1.second,
+      )
+      ceiling = EPSS::Client::MAX_BACKOFF * 1.1
+      # A large attempt count would overflow / sleep for hours without a cap.
+      [10, 20, 40, 100].each do |attempt|
+        delay = client.backoff_delay(attempt)
+        delay.should be >= EPSS::Client::MAX_BACKOFF
+        delay.should be <= ceiling
+      end
+    end
+
+    it "adds jitter so concurrent retries do not wake in lockstep" do
+      client = EPSS::Client.new(
+        transport: StubTransport.from_body("{}"),
+        retry_backoff: 1.second,
+      )
+      samples = Array.new(50) { client.backoff_delay(10) }
+      # attempt 10 with a 1s base would be 512s, so it is clamped to
+      # MAX_BACKOFF; jitter must keep it within [cap, cap*1.1] and produce
+      # more than one distinct value across samples.
+      samples.uniq.size.should be > 1
+      samples.each do |d|
+        d.should be >= EPSS::Client::MAX_BACKOFF
+        d.should be <= EPSS::Client::MAX_BACKOFF * 1.1
+      end
+    end
+  end
 end
 
 describe EPSS::Response do
