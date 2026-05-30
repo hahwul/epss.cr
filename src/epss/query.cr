@@ -302,6 +302,19 @@ module EPSS
       s
     end
 
+    # Returns a new `Query` with the given fields overridden, falling back to
+    # the receiver's current value for any argument left `nil`.
+    #
+    # KNOWN LIMITATION (by design): for the nilable scalar/collection fields
+    # the override uses `arg || @field`, so passing `nil` means "keep the
+    # existing value" rather than "clear it". This is exactly what the public
+    # `with_*` builders need — they are strictly additive and always pass a
+    # concrete value, so a field can never be cleared back to `nil` through
+    # this path. There is intentionally no `without_*` API. `pretty` and
+    # `envelope` use an explicit `.nil?` check instead because `false` is a
+    # meaningful (non-clearing) override for a `Bool?` field. Do not migrate
+    # the other fields to the sentinel style without first adding a clearing
+    # API and tests, as the additive `with_*` contract depends on this.
     private def copy(
       cves : Array(String)? = nil,
       date : Time? = nil,
