@@ -71,6 +71,32 @@ describe EPSS::CSV do
       end
     end
 
+    # Regression: a caller-supplied IO is theirs to manage; parse must not
+    # close it out from under them.
+    it "does not close a caller-supplied IO" do
+      io = IO::Memory.new("cve,epss,percentile\nCVE-1,0.1,0.5\n")
+      EPSS::CSV.parse(io)
+      io.closed?.should be_false
+    end
+
+    # Regression: parsing a Path opens (and must close) its own File, so the
+    # same path can be parsed repeatedly without leaking file handles.
+    it "closes its own File handle for a Path and can be re-parsed" do
+      csv = "cve,epss,percentile\nCVE-1,0.1,0.5\n"
+      path = File.tempfile("epss-feed", ".csv") do |f|
+        f.print csv
+      end
+      begin
+        first = EPSS::CSV.parse(Path.new(path.path))
+        second = EPSS::CSV.parse(Path.new(path.path))
+        first.scores.first.cve.should eq("CVE-1")
+        second.scores.first.cve.should eq("CVE-1")
+        first.scores.size.should eq(1)
+      ensure
+        path.delete
+      end
+    end
+
     it "auto-detects gzip input" do
       raw = <<-CSV
         #model_version:v2025.03.14,score_date:2026-05-18T00:00:00+0000
@@ -117,6 +143,30 @@ describe EPSS::CSV do
       seen = [] of String
       EPSS::CSV.each_score(IO::Memory.new(csv)) { |s| seen << s.cve }
       seen.should eq(["CVE-1", "CVE-2", "CVE-3"])
+    end
+
+    # Regression: streaming over a caller-supplied IO must not close it.
+    it "does not close a caller-supplied IO" do
+      io = IO::Memory.new("cve,epss,percentile\nCVE-1,0.1,0.5\n")
+      EPSS::CSV.each_score(io) { |_| }
+      io.closed?.should be_false
+    end
+
+    # Regression: each_score opens (and must close) its own File for a Path
+    # so it can be streamed repeatedly without leaking handles.
+    it "closes its own File handle for a Path and can be re-streamed" do
+      csv = "cve,epss,percentile\nCVE-1,0.1,0.5\n"
+      path = File.tempfile("epss-feed", ".csv") do |f|
+        f.print csv
+      end
+      begin
+        seen = [] of String
+        EPSS::CSV.each_score(Path.new(path.path)) { |s| seen << s.cve }
+        EPSS::CSV.each_score(Path.new(path.path)) { |s| seen << s.cve }
+        seen.should eq(["CVE-1", "CVE-1"])
+      ensure
+        path.delete
+      end
     end
   end
 end
