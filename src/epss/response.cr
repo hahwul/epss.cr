@@ -132,14 +132,26 @@ module EPSS
       end
     end
 
+    # Int32 range expressed as Int64 / Float64 bounds so we can guard the
+    # numeric branches below *before* attempting a conversion that would
+    # otherwise raise a raw `OverflowError` (e.g. a JSON value of
+    # 2147483648). Out-of-range values surface as the library's
+    # `ParseError`, consistent with every other malformed-field path here.
+    INT32_RANGE_I64 = Int32::MIN.to_i64..Int32::MAX.to_i64
+    INT32_MIN_F64   = Int32::MIN.to_f64
+    INT32_MAX_F64   = Int32::MAX.to_f64
+
     private def self.int(obj : Hash(String, ::JSON::Any), key : String, *, default : Int32? = nil) : Int32
       if v = obj[key]?
         case raw = v.raw
-        when Int64  then raw.to_i32
+        when Int64
+          INT32_RANGE_I64.includes?(raw) ? raw.to_i32 : raise ParseError.new("integer value out of range for '#{key}': #{raw}")
         when Int32  then raw
         when String then raw.to_i32? || raise ParseError.new("non-integer value for '#{key}': #{raw}")
         when Float
-          if raw.to_i.to_f == raw
+          if raw < INT32_MIN_F64 || raw > INT32_MAX_F64
+            raise ParseError.new("integer value out of range for '#{key}': #{raw}")
+          elsif raw.to_i32.to_f == raw
             raw.to_i32
           else
             raise ParseError.new("non-integer value for '#{key}': #{raw}")

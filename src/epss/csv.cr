@@ -82,16 +82,22 @@ module EPSS
     # Parse an entire EPSS feed from a string, IO, or path. Gzip-compressed
     # input is auto-detected by the magic bytes `1f 8b`.
     def parse(input : String | IO | Path) : Feed
-      io = open_io(input)
-      io = Compress::Gzip::Reader.new(io) if gzip?(io)
-
-      metadata = Metadata.new
-      scores = [] of Score
-      each_score_from(io) do |score, meta|
-        metadata = meta if meta
-        scores << score
+      source = open_io(input)
+      io = gzip?(source) ? Compress::Gzip::Reader.new(source) : source
+      begin
+        metadata = Metadata.new
+        scores = [] of Score
+        each_score_from(io) do |score, meta|
+          metadata = meta if meta
+          scores << score
+        end
+        Feed.new(metadata, scores)
+      ensure
+        # Only close handles we opened ourselves; a caller-supplied IO is
+        # theirs to manage. `open_io` returns a fresh `File`/`IO::Memory`
+        # for `Path`/`String` inputs but passes any `IO` straight through.
+        source.close unless input.is_a?(IO)
       end
-      Feed.new(metadata, scores)
     end
 
     # Yield each `Score` without buffering the whole feed in memory. Useful
@@ -105,9 +111,14 @@ module EPSS
     # end
     # ```
     def each_score(input : String | IO | Path, & : Score ->) : Nil
-      io = open_io(input)
-      io = Compress::Gzip::Reader.new(io) if gzip?(io)
-      each_score_from(io) { |score, _| yield score }
+      source = open_io(input)
+      io = gzip?(source) ? Compress::Gzip::Reader.new(source) : source
+      begin
+        each_score_from(io) { |score, _| yield score }
+      ensure
+        # See `parse`: close only what we opened, never the caller's IO.
+        source.close unless input.is_a?(IO)
+      end
     end
 
     private def open_io(input : String | IO | Path) : IO
