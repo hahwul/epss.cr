@@ -8,7 +8,7 @@ weight = 1
 
 | Requirement | Version    |
 |-------------|------------|
-| Crystal     | >= 1.20.2  |
+| Crystal     | >= 1.21.0  |
 
 epss.cr is pure Crystal with no native dependencies — it runs anywhere
 Crystal does. The only external services it touches are the public FIRST
