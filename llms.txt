@@ -1,0 +1,28 @@
+# epss.cr
+
+> A Crystal implementation of the Exploit Prediction Scoring System (EPSS)
+
+This is the documentation for epss.cr, a Crystal library that consumes the FIRST EPSS REST API and daily CSV feed, exposing typed Score and Band value objects with JSON round-trip and time-series flattening.
+
+## Pages
+
+- [epss.cr](https://epss.cr.hahwul.com/): A Crystal implementation of the Exploit Prediction Scoring System (EPSS)
+
+## API Reference
+
+- [Band](https://epss.cr.hahwul.com/api-reference/band/): EPSS::Band — qualitative classification
+- [Client](https://epss.cr.hahwul.com/api-reference/client/): EPSS::Client — REST API client for the FIRST EPSS endpoint
+- [CSV](https://epss.cr.hahwul.com/api-reference/csv/): EPSS::CSV — parser for the daily score feed
+- [Errors](https://epss.cr.hahwul.com/api-reference/errors/): EPSS::Error and its subclasses
+- [Query](https://epss.cr.hahwul.com/api-reference/query/): EPSS::Query — typed query builder for the FIRST API
+- [Response](https://epss.cr.hahwul.com/api-reference/response/): EPSS::Response — decoded envelope from one API call
+- [Score](https://epss.cr.hahwul.com/api-reference/score/): EPSS::Score — a single daily measurement for one CVE
+
+## User Guide
+
+- [API Client](https://epss.cr.hahwul.com/user-guide/api-client/): Filters, pagination, retries, and custom transports
+- [CSV Feed](https://epss.cr.hahwul.com/user-guide/csv-feed/): Parsing the public daily EPSS score dump
+- [Getting Started](https://epss.cr.hahwul.com/user-guide/getting-started/): Install epss.cr and fetch your first EPSS score
+- [JSON & Bands](https://epss.cr.hahwul.com/user-guide/json-and-bands/): JSON round-trip and qualitative classification
+- [Time-series](https://epss.cr.hahwul.com/user-guide/time-series/): 30-day EPSS history per CVE
+

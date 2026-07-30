@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="30-day EPSS history per CVE">
+  <title>Time-series - epss.cr</title>
+  <script>(function(){try{var t=localStorage.getItem("hwaro-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}})()</script>
+  <meta property="og:title" content="Time-series">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://epss.cr.hahwul.com/user-guide/time-series/">
+  <meta property="og:description" content="30-day EPSS history per CVE">
+  <meta property="og:image" content="https://epss.cr.hahwul.com/og-images/user-guide-time-series.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Time-series">
+  <meta name="twitter:description" content="30-day EPSS history per CVE">
+  <meta name="twitter:image" content="https://epss.cr.hahwul.com/og-images/user-guide-time-series.png">
+  <link rel="canonical" href="https://epss.cr.hahwul.com/user-guide/time-series/">
+  <link rel="stylesheet" href="https://epss.cr.hahwul.com/css/style.css">
+  
+  <meta name="apple-mobile-web-app-title" content="epss.cr">
+
+</head>
+<body data-section="user-guide">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="docs-header">
+  <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="sidebar">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h12M2 8h12M2 11.5h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </button>
+  <a href="https://epss.cr.hahwul.com/" class="logo">epss.cr <span>Documentation</span></a>
+  <nav class="header-nav" aria-label="Sections">
+    <a href="https://epss.cr.hahwul.com/user-guide/" class="active">User Guide</a><a href="https://epss.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" type="button" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>&#8984;K</kbd>
+    </button>
+    <button class="theme-toggle" type="button" data-mode="auto" aria-label="Theme: auto" title="Theme: auto">
+      <svg class="tt-auto" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>
+      <svg class="tt-light" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 .9v2M8 13.1v2M.9 8h2M13.1 8h2M2.98 2.98l1.42 1.42M11.6 11.6l1.42 1.42M13.02 2.98L11.6 4.4M4.4 11.6l-1.42 1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <svg class="tt-dark" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 9.9A5.8 5.8 0 0 1 6.1 2.6a5.8 5.8 0 1 0 7.3 7.3z" fill="currentColor"/></svg>
+    </button>
+    <a class="gh-link" href="https://github.com/hahwul/epss.cr" aria-label="GitHub repository">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+    </a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="searchInput" aria-label="Search" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+<aside class="docs-sidebar" id="sidebar">
+
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">User Guide</div>
+    <ul class="sidebar-links">
+      <li><a href="https://epss.cr.hahwul.com/user-guide/">Overview</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/user-guide/api-client/">API Client</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/user-guide/csv-feed/">CSV Feed</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/user-guide/time-series/" class="active" aria-current="page">Time-series</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/user-guide/json-and-bands/">JSON &amp; Bands</a></li>
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">API Reference</div>
+    <ul class="sidebar-links">
+      <li><a href="https://epss.cr.hahwul.com/api-reference/">Overview</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/api-reference/score/">Score</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/api-reference/band/">Band</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/api-reference/client/">Client</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/api-reference/query/">Query</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/api-reference/response/">Response</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/api-reference/csv/">CSV</a></li>
+      
+      <li><a href="https://epss.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      
+    </ul>
+  </div>
+  
+</aside>
+<div class="sidebar-scrim"></div>
+  <main id="main" class="docs-main">
+    <h1>Time-series</h1>
+    <p class="lede">30-day EPSS history per CVE</p>
+    <p>The FIRST EPSS API exposes per-CVE history via the <code>scope=time-series</code>
+query parameter. epss.cr flattens the nested response into a regular
+<code>Array(Score)</code> — one entry per day — so the rest of your code doesn't
+need a special case.</p>
+<h2 id="quick-history">Quick history</h2>
+<pre><code class="language-crystal hljs">client <span class="hljs-operator">=</span> <span class="hljs-variable constant_">EPSS</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Client</span>.new
+series <span class="hljs-operator">=</span> client.time_series(<span class="hljs-string">&quot;</span><span class="hljs-string">CVE-2022-27225</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+
+series.size            <span class="hljs-comment"># =&gt; 31 (today + 30 prior days)</span>
+series.first.date.not_nil!.to_s(<span class="hljs-string">&quot;</span><span class="hljs-string">%Y-%m-%d</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)  <span class="hljs-comment"># oldest</span>
+series.last.date.not_nil!.to_s(<span class="hljs-string">&quot;</span><span class="hljs-string">%Y-%m-%d</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)   <span class="hljs-comment"># most recent</span>
+</code></pre>
+<p><code>#time_series</code> sorts the results oldest-first.</p>
+<h2 id="what-the-api-returns">What the API returns</h2>
+<p>For <code>scope=time-series</code>, FIRST wraps each CVE's history inside the data
+row:</p>
+<pre><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+  <span class="hljs-name">&quot;data&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">{</span>
+    <span class="hljs-name">&quot;cve&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;CVE-2022-27225&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-name">&quot;epss&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;0.001870000&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-name">&quot;percentile&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;0.401290000&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-name">&quot;date&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;2026-05-18&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-name">&quot;time-series&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+      <span class="hljs-punctuation">{</span><span class="hljs-name">&quot;epss&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;0.001870000&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-name">&quot;percentile&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;0.401770000&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-name">&quot;date&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;2026-05-17&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+      ...
+    <span class="hljs-punctuation">]</span>
+  <span class="hljs-punctuation">}</span><span class="hljs-punctuation">]</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+<p><code>EPSS::Response.from_json</code> automatically:</p>
+<ol>
+<li>Promotes the parent row's <code>{cve, epss, percentile, date}</code> to a <code>Score</code>.</li>
+<li>Expands every entry of <code>time-series</code> into its own <code>Score</code>, copying the
+parent's <code>cve</code>.</li>
+</ol>
+<p>So an <code>EPSS::Response</code> for a time-series query carries ~30 <code>Score</code>s per
+queried CVE in its <code>scores</code> array.</p>
+<h2 id="plotting-charting">Plotting / charting</h2>
+<p>Because each <code>Score</code> is a regular value object with <code>cve</code>, <code>epss</code>,
+<code>percentile</code>, and <code>date</code>, plotting libraries can ingest the series
+directly:</p>
+<pre><code class="language-crystal hljs">points <span class="hljs-operator">=</span> client.time_series(<span class="hljs-string">&quot;</span><span class="hljs-string">CVE-2022-27225</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>).map <span class="hljs-keyword">do</span> <span class="hljs-operator">|</span>s<span class="hljs-operator">|</span>
+  {x: s.date.not_nil!.to_unix, y: s.epss}
+<span class="hljs-keyword">end</span>
+</code></pre>
+<h2 id="time-series-filters">Time-series + filters</h2>
+<p>You can combine <code>scope=time-series</code> with threshold filters. The
+flattening preserves filter behavior because the server pre-filters CVEs
+before expanding history.</p>
+<pre><code class="language-crystal hljs">query <span class="hljs-operator">=</span> <span class="hljs-variable constant_">EPSS</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Query</span>.new(
+  cves: [<span class="hljs-string">&quot;</span><span class="hljs-string">CVE-2022-27225</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>, <span class="hljs-string">&quot;</span><span class="hljs-string">CVE-2021-44228</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>],
+  scope: <span class="hljs-string">&quot;</span><span class="hljs-string">time-series</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+)
+client.fetch(query).scores.size  <span class="hljs-comment"># ~31 days × 2 CVEs ≈ 62</span>
+</code></pre>
+<h2 id="pagination">Pagination</h2>
+<p><code>Client#each_score</code> advances by the server-reported row count
+(<code>Response#row_count</code>) rather than the flattened score count, so paging
+through time-series queries never skips a CVE.</p>
+
+    
+    <nav class="page-nav" aria-label="Adjacent pages">
+      
+      <a class="page-nav-link page-nav-prev" href="https://epss.cr.hahwul.com/user-guide/csv-feed/" rel="prev">
+        <span class="page-nav-label">Previous</span>
+        <span class="page-nav-title">CSV Feed</span>
+      </a>
+      
+      
+      <a class="page-nav-link page-nav-next" href="https://epss.cr.hahwul.com/user-guide/json-and-bands/" rel="next">
+        <span class="page-nav-label">Next</span>
+        <span class="page-nav-title">JSON &amp; Bands</span>
+      </a>
+      
+    </nav>
+    
+    <div class="docs-footer">
+      <p>epss.cr documentation</p>
+      <div class="docs-footer-links">
+        <a href="https://github.com/hahwul/epss.cr">GitHub</a>
+        <a href="https://github.com/hahwul/hwaro">Built with Hwaro</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://epss.cr.hahwul.com/js/search.js"></script>
+<script>
+(function () {
+  var KEY = "hwaro-theme";
+  var MODES = ["auto", "light", "dark"];
+  var root = document.documentElement;
+  var btn = document.querySelector(".theme-toggle");
+  if (!btn) return;
+  function apply(mode) {
+    if (mode === "auto") {
+      root.removeAttribute("data-theme");
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    } else {
+      root.setAttribute("data-theme", mode);
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+    }
+    btn.setAttribute("data-mode", mode);
+    btn.setAttribute("aria-label", "Theme: " + mode);
+    btn.title = "Theme: " + mode;
+  }
+  var stored = "auto";
+  try { var t = localStorage.getItem(KEY); if (t === "light" || t === "dark") stored = t; } catch (e) {}
+  btn.addEventListener("click", function () {
+    apply(MODES[(MODES.indexOf(btn.getAttribute("data-mode")) + 1) % MODES.length]);
+  });
+  apply(stored);
+})();
+(function () {
+  var btn = document.querySelector(".nav-toggle");
+  var scrim = document.querySelector(".sidebar-scrim");
+  var sidebar = document.getElementById("sidebar");
+  if (!btn) return;
+  function set(open) {
+    document.body.classList.toggle("nav-open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  btn.addEventListener("click", function () {
+    set(!document.body.classList.contains("nav-open"));
+  });
+  if (scrim) scrim.addEventListener("click", function () { set(false); });
+  if (sidebar) sidebar.addEventListener("click", function (e) {
+    if (e.target.closest("a")) set(false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") set(false);
+  });
+})();
+</script>
+
+</body>
+</html>
