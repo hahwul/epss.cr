@@ -2,6 +2,7 @@
 title = "API Reference"
 description = "Public types and methods exposed by epss.cr"
 sort_by = "weight"
+weight = 2
 +++
 
 Reference documentation for every public type in epss.cr. Each page
