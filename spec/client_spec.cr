@@ -118,6 +118,69 @@ describe EPSS::Client do
       attempts.should eq(3) # 1 initial + 2 retries
     end
 
+    # Regression: the legacy feed host answers with a 301 to the current
+    # host, so a client that treats 3xx as a hard failure cannot download
+    # the feed the README advertises.
+    it "follows a redirect to another host" do
+      payload = fixture_envelope([
+        {cve: "CVE-1", epss: "0.1", percentile: "0.5", date: "2026-05-18"},
+      ])
+      stub = StubTransport.new ->(uri : URI, _headers : HTTP::Headers) {
+        if uri.host == "api.first.org"
+          HTTP::Client::Response.new(301, body: "", headers: HTTP::Headers{
+            "Location" => "https://api2.first.org#{uri.request_target}",
+          })
+        else
+          HTTP::Client::Response.new(200, body: payload)
+        end
+      }
+      client = EPSS::Client.new(transport: stub, max_retries: 0)
+
+      client.fetch(EPSS::Query.new(cves: ["CVE-1"])).scores.first.cve.should eq("CVE-1")
+      stub.requests.map(&.[0].host).should eq(["api.first.org", "api2.first.org"])
+      # The redirected request keeps the original query string.
+      stub.requests.last[0].query.not_nil!.should contain("cve=CVE-1")
+    end
+
+    it "resolves a relative redirect Location against the current URI" do
+      stub = StubTransport.new ->(uri : URI, _headers : HTTP::Headers) {
+        if uri.path == "/data/v1/epss"
+          HTTP::Client::Response.new(302, body: "", headers: HTTP::Headers{"Location" => "/data/v2/epss"})
+        else
+          HTTP::Client::Response.new(200, body: fixture_envelope(
+            [{cve: "CVE-1", epss: "0.1", percentile: "0.5", date: "2026-05-18"}]
+          ))
+        end
+      }
+      EPSS::Client.new(transport: stub, max_retries: 0).fetch
+      stub.requests.last[0].path.should eq("/data/v2/epss")
+      stub.requests.last[0].host.should eq("api.first.org")
+    end
+
+    it "gives up after MAX_REDIRECTS hops instead of looping forever" do
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        HTTP::Client::Response.new(302, body: "", headers: HTTP::Headers{"Location" => "/loop"})
+      }
+      client = EPSS::Client.new(transport: stub, max_retries: 0)
+      expect_raises(EPSS::APIError, /redirect/) { client.fetch }
+      stub.requests.size.should eq(EPSS::Client::MAX_REDIRECTS + 1)
+    end
+
+    it "raises APIError on a redirect without a Location header" do
+      stub = StubTransport.from_body("", status: 301)
+      client = EPSS::Client.new(transport: stub, max_retries: 0)
+      expect_raises(EPSS::APIError, /Location/) { client.fetch }
+    end
+
+    it "refuses to follow a redirect to a non-HTTP scheme" do
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        HTTP::Client::Response.new(302, body: "", headers: HTTP::Headers{"Location" => "file:///etc/passwd"})
+      }
+      client = EPSS::Client.new(transport: stub, max_retries: 0)
+      expect_raises(EPSS::APIError, /unsupported scheme/) { client.fetch }
+      stub.requests.size.should eq(1)
+    end
+
     it "retries 503 then succeeds" do
       payload = fixture_envelope([
         {cve: "CVE-1", epss: "0.1", percentile: "0.5", date: "2026-05-18"},
@@ -232,6 +295,35 @@ describe EPSS::Client do
       client.each_score(EPSS::Query.new(epss_gt: 0.0), page_size: 3) { |s| seen << s.cve }
       seen.should eq(["CVE-1", "CVE-2", "CVE-3", "CVE-4", "CVE-5"])
       stub.requests.size.should eq(2)
+    end
+
+    # Regression: `limit` used to be overwritten by `page_size`, so a bounded
+    # query such as `Query.top(10)` paginated through the whole population.
+    it "treats a query limit as the total row budget" do
+      stub = paging_stub(total: 5000)
+      client = EPSS::Client.new(transport: stub)
+
+      scores = client.all_scores(EPSS::Query.top(10))
+      scores.size.should eq(10)
+      stub.requests.size.should eq(1)
+      URI::Params.parse(stub.requests.first[0].query.not_nil!)["limit"].should eq("10")
+    end
+
+    it "splits a large query limit across pages and stops at the budget" do
+      stub = paging_stub(total: 5000)
+      client = EPSS::Client.new(transport: stub)
+
+      scores = client.all_scores(EPSS::Query.new(epss_gt: 0.5).with_limit(2500), page_size: 1000)
+      scores.size.should eq(2500)
+      limits = stub.requests.map { |(uri, _)| URI::Params.parse(uri.query.not_nil!)["limit"] }
+      limits.should eq(["1000", "1000", "500"])
+    end
+
+    it "still paginates to exhaustion when the query has no limit" do
+      stub = paging_stub(total: 5)
+      scores = EPSS::Client.new(transport: stub).all_scores(EPSS::Query.new(epss_gt: 0.5), page_size: 2)
+      scores.size.should eq(5)
+      stub.requests.size.should eq(3)
     end
   end
 

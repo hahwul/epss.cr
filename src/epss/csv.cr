@@ -83,15 +83,20 @@ module EPSS
     # input is auto-detected by the magic bytes `1f 8b`.
     def parse(input : String | IO | Path) : Feed
       source = open_io(input)
-      io = gzip?(source) ? Compress::Gzip::Reader.new(source) : source
+      gzipped = gzip?(source)
       begin
-        metadata = Metadata.new
-        scores = [] of Score
-        each_score_from(io) do |score, meta|
-          metadata = meta if meta
-          scores << score
+        translate_gzip_errors(gzipped) do
+          # Constructed inside the translation block: the reader validates
+          # the gzip header eagerly, so a corrupt one raises right here.
+          io = gzipped ? Compress::Gzip::Reader.new(source) : source
+          metadata = Metadata.new
+          scores = [] of Score
+          each_score_from(io) do |score, meta|
+            metadata = meta if meta
+            scores << score
+          end
+          Feed.new(metadata, scores)
         end
-        Feed.new(metadata, scores)
       ensure
         # Only close handles we opened ourselves; a caller-supplied IO is
         # theirs to manage. `open_io` returns a fresh `File`/`IO::Memory`
@@ -112,9 +117,14 @@ module EPSS
     # ```
     def each_score(input : String | IO | Path, & : Score ->) : Nil
       source = open_io(input)
-      io = gzip?(source) ? Compress::Gzip::Reader.new(source) : source
+      gzipped = gzip?(source)
       begin
-        each_score_from(io) { |score, _| yield score }
+        translate_gzip_errors(gzipped) do
+          # See `parse`: the reader must be built inside the translation
+          # block so a corrupt gzip header surfaces as `ParseError`.
+          io = gzipped ? Compress::Gzip::Reader.new(source) : source
+          each_score_from(io) { |score, _| yield score }
+        end
       ensure
         # See `parse`: close only what we opened, never the caller's IO.
         source.close unless input.is_a?(IO)
@@ -127,7 +137,7 @@ module EPSS
       when Path then File.open(input)
       when String
         # Treat as raw CSV content unless it points at an existing file.
-        if File.file?(input)
+        if path_like?(input) && File.file?(input)
           File.open(input)
         else
           IO::Memory.new(input)
@@ -135,6 +145,35 @@ module EPSS
       else
         raise ArgumentError.new("unsupported input #{input.class}")
       end
+    end
+
+    # `File.file?` raises `ArgumentError` for a string containing a NUL byte,
+    # which is exactly what `File.read("epss_scores-....csv.gz")` hands us —
+    # every gzip header carries a NUL in its flag byte. Screen out values that
+    # cannot possibly be a filesystem path before touching the filesystem, so
+    # feed *content* is never mistaken for a path probe.
+    private def path_like?(value : String) : Bool
+      return false if value.empty?
+      # Longer than PATH_MAX on every supported platform: it is content.
+      return false if value.bytesize > 4096
+      # gzip magic — binary payload, not a path.
+      return false if value.byte_at?(0) == 0x1f_u8 && value.byte_at?(1) == 0x8b_u8
+      value.each_char do |char|
+        return false if char == '\0' || char == '\n' || char == '\r'
+      end
+      true
+    end
+
+    # Decompression failures on a truncated or corrupt gzip stream surface as
+    # `Compress::*::Error` / `IO::EOFError`. Translate them into the library's
+    # own `ParseError` so a caller only ever has to rescue `EPSS::Error`.
+    # Plain (non-gzip) input re-raises untouched — those exceptions come from
+    # the caller's IO or block, not from our decompressor.
+    private def translate_gzip_errors(gzipped : Bool, &)
+      yield
+    rescue ex : Compress::Gzip::Error | Compress::Deflate::Error | IO::EOFError
+      raise ex unless gzipped
+      raise ParseError.new("corrupt gzip stream: #{ex.message}", cause: ex)
     end
 
     # Peek two bytes to detect the gzip magic without consuming them. IOs
@@ -146,8 +185,10 @@ module EPSS
       peeked.size >= 2 && peeked[0] == 0x1f && peeked[1] == 0x8b
     end
 
-    private METADATA_RE = /score_date:([^,\s]+)/
-    private MODEL_RE    = /model_version:([^,\s]+)/
+    # The published feed separates key and value with `:`, but mirrors and
+    # older archives of the same file use `=`. Accept either.
+    private METADATA_RE = /score_date[:=]([^,\s]+)/
+    private MODEL_RE    = /model_version[:=]([^,\s]+)/
 
     private BOM = "\xEF\xBB\xBF"
 
