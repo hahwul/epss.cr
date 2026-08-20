@@ -97,6 +97,18 @@ describe EPSS::CSV do
       end
     end
 
+    it "reads model_version/score_date written with '=' separators" do
+      csv = <<-CSV
+        #model_version=v2025.03.14,score_date=2026-05-18T00:00:00+0000
+        cve,epss,percentile
+        CVE-1,0.1,0.5
+        CSV
+
+      feed = EPSS::CSV.parse(csv)
+      feed.metadata.model_version.should eq("v2025.03.14")
+      feed.metadata.score_date.not_nil!.to_s("%Y-%m-%d").should eq("2026-05-18")
+    end
+
     it "auto-detects gzip input" do
       raw = <<-CSV
         #model_version:v2025.03.14,score_date:2026-05-18T00:00:00+0000
@@ -114,6 +126,47 @@ describe EPSS::CSV do
       feed.scores.size.should eq(1)
       feed.scores.first.cve.should eq("CVE-9")
       feed.scores.first.epss.should be_close(0.42, 1e-9)
+    end
+
+    # Regression: `EPSS::CSV.parse(File.read("...csv.gz"))` — the usage the
+    # README documents — hands us a String full of NUL bytes. Probing the
+    # filesystem with it used to raise `ArgumentError: String contains null
+    # byte` before the content ever reached the gzip reader.
+    it "parses a String holding raw gzip bytes" do
+      raw = <<-CSV
+        #model_version:v2025.03.14,score_date:2026-05-18T00:00:00+0000
+        cve,epss,percentile
+        CVE-7,0.31,0.91
+        CSV
+
+      buffer = IO::Memory.new
+      Compress::Gzip::Writer.open(buffer, &.print(raw))
+
+      feed = EPSS::CSV.parse(String.new(buffer.to_slice))
+      feed.metadata.model_version.should eq("v2025.03.14")
+      feed.scores.map(&.cve).should eq(["CVE-7"])
+    end
+
+    # Regression: a corrupt feed must raise the library's own error type;
+    # `Compress::Deflate::Error` / `IO::EOFError` used to leak straight out.
+    it "raises ParseError on a truncated gzip stream" do
+      buffer = IO::Memory.new
+      Compress::Gzip::Writer.open(buffer) do |gz|
+        gz.print "cve,epss,percentile\n"
+        200.times { |i| gz.print "CVE-#{i},0.1,0.5\n" }
+      end
+      truncated = buffer.to_slice[0, buffer.size // 2]
+
+      expect_raises(EPSS::ParseError, /gzip/) do
+        EPSS::CSV.parse(IO::Memory.new(truncated))
+      end
+    end
+
+    it "raises ParseError on a corrupt gzip header" do
+      corrupt = IO::Memory.new(Bytes[0x1f, 0x8b, 0x08, 0x00, 0x41, 0x42, 0x43, 0x44])
+      expect_raises(EPSS::ParseError, /gzip/) do
+        EPSS::CSV.parse(corrupt)
+      end
     end
   end
 
@@ -150,6 +203,19 @@ describe EPSS::CSV do
       io = IO::Memory.new("cve,epss,percentile\nCVE-1,0.1,0.5\n")
       EPSS::CSV.each_score(io) { |_| }
       io.closed?.should be_false
+    end
+
+    it "raises ParseError when streaming a truncated gzip stream" do
+      buffer = IO::Memory.new
+      Compress::Gzip::Writer.open(buffer) do |gz|
+        gz.print "cve,epss,percentile\n"
+        200.times { |i| gz.print "CVE-#{i},0.1,0.5\n" }
+      end
+      truncated = buffer.to_slice[0, buffer.size // 2]
+
+      expect_raises(EPSS::ParseError, /gzip/) do
+        EPSS::CSV.each_score(IO::Memory.new(truncated)) { |_| }
+      end
     end
 
     # Regression: each_score opens (and must close) its own File for a Path

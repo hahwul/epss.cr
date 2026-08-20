@@ -79,15 +79,23 @@ module EPSS
     end
   end
 
-  # Parse either a bare row (`{"cve": ..., "epss": ..., "percentile": ...}`)
-  # or a full API envelope (`{"status": "OK", "data": [...]}`). Returns an
-  # `Array(Score)` in both cases.
+  # Parse a bare row (`{"cve": ..., "epss": ..., "percentile": ...}`), a bare
+  # row array (what `envelope=false` returns), or a full API envelope
+  # (`{"status": "OK", "data": [...]}`). Returns an `Array(Score)` in every
+  # case.
   def self.from_json(input : String | IO) : Array(Score)
+    # Parse exactly once and dispatch on the decoded document: an `IO` is
+    # drained by the first pass, so re-reading it downstream would fail with
+    # a raw `JSON::ParseException` on an empty stream.
     json = ::JSON.parse(input)
+    body = input.is_a?(String) ? input : nil
+
+    return Response.from_json(json, body: body).scores if json.as_a?
+
     obj = json.as_h? || raise ParseError.new("expected JSON object")
 
     if obj.has_key?("data")
-      Response.from_json(input).scores
+      Response.from_json(json, body: body).scores
     elsif obj.has_key?("cve")
       [score_from_object(obj)]
     else

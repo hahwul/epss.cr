@@ -32,6 +32,21 @@ class StubTransport < EPSS::Transport
   end
 end
 
+# A `StubTransport` that behaves like the paginated API: it honors the
+# `offset` / `limit` it is sent and reports `total` rows overall.
+def paging_stub(total : Int32) : StubTransport
+  StubTransport.new ->(uri : URI, _headers : HTTP::Headers) {
+    params = URI::Params.parse(uri.query || "")
+    offset = params["offset"]?.try(&.to_i) || 0
+    limit = params["limit"]?.try(&.to_i) || 100
+    rows = (offset...Math.min(offset + limit, total)).map do |i|
+      {cve: "CVE-#{i}", epss: "0.1", percentile: "0.5", date: "2026-05-18"}
+    end
+    body = fixture_envelope(rows, total: total, offset: offset, limit: limit)
+    HTTP::Client::Response.new(200, body: body)
+  }
+end
+
 def fixture_envelope(
   rows : Array(NamedTuple(cve: String, epss: String, percentile: String, date: String)),
   total : Int32? = nil,

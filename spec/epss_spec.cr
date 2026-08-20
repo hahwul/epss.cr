@@ -31,6 +31,23 @@ describe EPSS do
       scores.first.percentile.should eq(0.9)
     end
 
+    # Regression: the envelope branch re-read `input` after `JSON.parse`
+    # had already drained it, so an IO envelope died with a raw
+    # `JSON::ParseException` on an empty stream.
+    it "decodes an envelope supplied as an IO" do
+      payload = fixture_envelope([
+        {cve: "CVE-1", epss: "0.1", percentile: "0.5", date: "2026-05-18"},
+        {cve: "CVE-2", epss: "0.2", percentile: "0.6", date: "2026-05-18"},
+      ])
+      scores = EPSS.from_json(IO::Memory.new(payload))
+      scores.map(&.cve).should eq(["CVE-1", "CVE-2"])
+    end
+
+    it "decodes a bare row array (envelope=false)" do
+      json = %([{"cve":"CVE-1","epss":"0.1","percentile":"0.5"},{"cve":"CVE-2","epss":"0.2","percentile":"0.6"}])
+      EPSS.from_json(json).map(&.cve).should eq(["CVE-1", "CVE-2"])
+    end
+
     it "raises ParseError on unknown shape" do
       expect_raises(EPSS::ParseError) do
         EPSS.from_json(%({"foo": "bar"}))

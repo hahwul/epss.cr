@@ -61,7 +61,34 @@ module EPSS
     # envelope reports an error, or `EPSS::ParseError` if the JSON is
     # missing required fields.
     def self.from_json(input : String | IO) : Response
-      json = ::JSON.parse(input)
+      from_json(::JSON.parse(input), body: input.is_a?(String) ? input : nil)
+    end
+
+    # Decode an already-parsed payload. Used by `EPSS.from_json`, which has
+    # to inspect the document's shape before dispatching and must not parse
+    # the same input twice — an `IO` is consumed by the first pass.
+    #
+    # `body` is only carried into `APIError#body` for error envelopes.
+    def self.from_json(json : ::JSON::Any, *, body : String? = nil) : Response
+      # `envelope=false` asks the API for the bare data array instead of the
+      # status wrapper. There is no status/total/offset to read in that
+      # shape, so synthesize a single-page success envelope around the rows.
+      if rows = json.as_a?
+        scores = [] of Score
+        rows.each { |row| scores.concat(scores_from_data_row(row)) }
+        return new(
+          status: "OK",
+          status_code: 200,
+          version: "1.0",
+          access: "public",
+          total: rows.size,
+          offset: 0,
+          limit: rows.size,
+          row_count: rows.size,
+          scores: scores,
+        )
+      end
+
       obj = json.as_h? || raise ParseError.new("expected JSON object at top level")
 
       status = string(obj, "status")
@@ -69,7 +96,7 @@ module EPSS
 
       if status != "OK" || status_code != 200
         message = obj["message"]?.try(&.as_s?) || "EPSS API error"
-        raise APIError.new(message, status: status_code, body: input.is_a?(String) ? input : nil)
+        raise APIError.new(message, status: status_code, body: body)
       end
 
       data_node = obj["data"]? || raise ParseError.new("missing data array in EPSS response")

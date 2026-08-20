@@ -83,6 +83,10 @@ client.each_score(EPSS::Query.new(epss_gt: 0.95, order: "!epss")) do |score|
 end
 ```
 
+`page_size:` controls the per-request page size; a `limit` on the query is
+the total row budget for the whole iteration, so
+`client.all_scores(EPSS::Query.top(10))` stops after ten rows.
+
 ### Parse the daily CSV feed
 
 ```crystal
@@ -124,7 +128,9 @@ query = EPSS::Query.new
 ```
 
 `Query` also exposes `with_pretty(true)` and `with_envelope(false)` for
-the other FIRST global parameters.
+the other FIRST global parameters. With `envelope=false` the API answers
+with a bare row array; `Response` decodes that too, reporting it as a
+single complete page (there is no `total` to paginate against).
 
 ### JSON round-trip
 
@@ -202,9 +208,11 @@ client = EPSS::Client.new(transport: FakeTransport.new)
 
 All errors descend from `EPSS::Error`:
 
-- `EPSS::ParseError` — malformed JSON / CSV / constructor argument.
+- `EPSS::ParseError` — malformed JSON / CSV / constructor argument, or a
+  truncated or corrupt gzip feed.
 - `EPSS::APIError`   — HTTP non-2xx, or `status != "OK"` in the envelope.
-  Carries the response `status` and `body`.
+  Carries the response `status` and `body`. Redirects are followed (up to
+  `EPSS::Client::MAX_REDIRECTS` hops) rather than reported as failures.
 
 Use `EPSS.from_json?` for the non-raising form.
 

@@ -65,6 +65,13 @@ module EPSS
     # is plenty to let a transient outage clear.
     MAX_BACKOFF = 30.seconds
 
+    # How many redirect hops a single request may follow. The legacy feed
+    # host (`epss.cyentia.com`) answers with a 301 to the current host, so a
+    # client that refuses to redirect cannot download the feed there at all.
+    # One hop is what the real hosts need; the extra headroom covers a
+    # future host move without allowing a redirect loop to spin forever.
+    MAX_REDIRECTS = 5
+
     getter base_uri : URI
     getter user_agent : String
     getter max_retries : Int32
@@ -128,17 +135,29 @@ module EPSS
     # subsequent pages while results remain. Uses the API's `limit` /
     # `offset` parameters; the iteration order matches the server's
     # response order (controlled by `query.order`).
+    #
+    # `page_size` is the per-request page granularity. A `limit` set on the
+    # query is the *total* row budget for the whole iteration — pagination
+    # stops once it is exhausted, so `all_scores(Query.top(10))` yields ten
+    # rows rather than the entire population.
     def each_score(query : Query = Query.new, *, page_size : Int32 = 1000, & : Score ->) : Nil
       raise ArgumentError.new("page_size must be positive") if page_size <= 0
       offset = query.offset || 0
+      remaining = query.limit
       loop do
-        page_query = query.with_offset(offset).with_limit(page_size)
+        size = remaining ? Math.min(page_size, remaining) : page_size
+        page_query = query.with_offset(offset).with_limit(size)
         resp = fetch(page_query)
         resp.scores.each { |score| yield score }
         # Advance by the *server-reported* row count, not the flattened
         # score count — `scope=time-series` inflates each row into ~30
         # daily entries, which would otherwise skip pages.
         break if resp.row_count == 0
+        if left = remaining
+          left -= resp.row_count
+          remaining = left
+          break if left <= 0
+        end
         break unless resp.more?
         offset += resp.row_count
       end
@@ -184,14 +203,28 @@ module EPSS
       }
 
       attempt = 0
+      redirects = 0
+      target = uri
 
       loop do
         attempt += 1
         begin
-          response = @transport.get(uri, headers)
+          response = @transport.get(target, headers)
           case response.status_code
           when 200
             return response.body
+          when 301, 302, 303, 307, 308
+            redirects += 1
+            if redirects > MAX_REDIRECTS
+              raise APIError.new(
+                "EPSS API request failed: more than #{MAX_REDIRECTS} redirects",
+                status: response.status_code,
+              )
+            end
+            target = redirect_target(target, response)
+            # A redirect hop is not a failed attempt — it must not consume
+            # the retry budget reserved for transient failures.
+            attempt -= 1
           when 429, 500, 502, 503, 504
             if attempt > @max_retries
               raise APIError.new(
@@ -224,6 +257,32 @@ module EPSS
           sleep_backoff(attempt)
         end
       end
+    end
+
+    # Resolve the `Location` of a redirect response against the URI that
+    # produced it. Relative targets are supported, and the scheme is
+    # restricted to HTTP(S) so a hostile redirect cannot push the transport
+    # at, say, a `file://` URI.
+    private def redirect_target(from : URI, response : HTTP::Client::Response) : URI
+      location = response.headers["Location"]?.presence
+      unless location
+        raise APIError.new(
+          "EPSS API request failed: HTTP #{response.status_code} without a Location header",
+          status: response.status_code,
+        )
+      end
+
+      target = URI.parse(location)
+      target = from.resolve(target) unless target.absolute?
+      unless target.scheme == "https" || target.scheme == "http"
+        raise APIError.new(
+          "EPSS API redirected to an unsupported scheme: #{location.inspect}",
+          status: response.status_code,
+        )
+      end
+      target
+    rescue ex : URI::Error
+      raise APIError.new("EPSS API returned an invalid redirect target", cause: ex)
     end
 
     # Parse a Retry-After response header. Supports both the seconds form
