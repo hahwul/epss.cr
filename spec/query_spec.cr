@@ -84,6 +84,14 @@ describe EPSS::Query do
       expect_raises(EPSS::ParseError) { EPSS::Query.new(limit: 0) }
     end
 
+    # Regression: FIRST treats an empty `cve=` as "no filter", so a blank id
+    # silently turned a single-CVE lookup into a whole-population query.
+    it "rejects blank CVE ids" do
+      expect_raises(EPSS::ParseError, "blank CVE id") { EPSS::Query.new(cves: [""]) }
+      expect_raises(EPSS::ParseError, "blank CVE id") { EPSS::Query.for_cve("") }
+      expect_raises(EPSS::ParseError, "blank CVE id") { EPSS::Query.new.with_cves(["CVE-1", ""]) }
+    end
+
     it "rejects non-positive days" do
       expect_raises(EPSS::ParseError) { EPSS::Query.new(days: 0) }
     end
