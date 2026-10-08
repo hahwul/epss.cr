@@ -102,7 +102,7 @@ module EPSS
     client.fetch(Query.top(n)).scores
   end
 
-  # CVEs whose EPSS probability is strictly above `threshold`. Streams
+  # CVEs whose EPSS probability is at or above `threshold`. Streams
   # all matching pages through the API and materializes them into an
   # array. Be aware that loose thresholds produce large result sets;
   # use `EPSS.client.each_score(Query.above(...))` directly to stream.

@@ -214,6 +214,15 @@ describe EPSS::Client do
       client = EPSS::Client.new(transport: StubTransport.from_body(empty))
       client.score("CVE-NONE").should be_nil
     end
+
+    # Regression: `score("")` sent `cve=`, which FIRST answers with the
+    # unfiltered population, so it returned an unrelated CVE's score.
+    it "raises on a blank CVE id instead of issuing an unfiltered request" do
+      stub = StubTransport.from_body("")
+      client = EPSS::Client.new(transport: stub)
+      expect_raises(EPSS::ParseError, "blank CVE id") { client.score("") }
+      stub.requests.should be_empty
+    end
   end
 
   describe "#scores" do

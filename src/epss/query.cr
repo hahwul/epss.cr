@@ -21,14 +21,15 @@ module EPSS
     # Specific publication date to query historical scores for.
     getter date : Time?
 
-    # Time-series window in days. Mutually exclusive with `scope`.
+    # Only CVEs added to the EPSS dataset within the last `days` days
+    # (FIRST's `days` parameter, starting at 1).
     getter days : Int32?
 
-    # Lower-bound thresholds (`epss > x` / `percentile > x`).
+    # Lower-bound thresholds (`epss >= x` / `percentile >= x`, inclusive).
     getter epss_gt : Float64?
     getter percentile_gt : Float64?
 
-    # Upper-bound thresholds (`epss < x` / `percentile < x`).
+    # Upper-bound thresholds (`epss <= x` / `percentile <= x`, inclusive).
     getter epss_lt : Float64?
     getter percentile_lt : Float64?
 
@@ -108,13 +109,13 @@ module EPSS
       new(order: "!epss", limit: n)
     end
 
-    # CVEs whose EPSS probability is strictly above `threshold`. Defaults
+    # CVEs whose EPSS probability is at or above `threshold`. Defaults
     # to the 0.95 cutoff commonly used by tier-1 triage policies.
     def self.above(threshold : Float64 = 0.95) : Query
       new(epss_gt: threshold, order: "!epss")
     end
 
-    # CVEs whose EPSS probability is strictly below `threshold`. Pair
+    # CVEs whose EPSS probability is at or below `threshold`. Pair
     # with `above` for inverse filters.
     def self.below(threshold : Float64) : Query
       new(epss_lt: threshold)
@@ -129,9 +130,9 @@ module EPSS
       new(q: text, order: "!epss")
     end
 
-    # Restrict results to scores published in the last `days` days.
-    # Maps to the FIRST `days` parameter rather than client-side
-    # filtering.
+    # Restrict results to CVEs added to the EPSS dataset in the last
+    # `days` days. Maps to the FIRST `days` parameter rather than
+    # client-side filtering.
     def self.recent(days : Int32) : Query
       new(days: days)
     end
@@ -264,6 +265,9 @@ module EPSS
     end
 
     private def validate! : Nil
+      # FIRST treats an empty `cve=` as "no filter" and returns the whole
+      # population, so a blank id must never reach the wire.
+      raise ParseError.new("blank CVE id") if @cves.any?(&.empty?)
       if (v = @epss_gt) && !v.in?(0.0..1.0)
         raise ParseError.new("epss_gt out of range: #{v}")
       end
