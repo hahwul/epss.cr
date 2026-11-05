@@ -117,17 +117,25 @@ module EPSS
       scores.sort_by { |s| s.date || Time.unix(0) }
     end
 
-    # Look up multiple CVEs in one call. The API caps the URL length, so
-    # this helper batches into chunks of `batch_size` (default 100) and
+    # Look up multiple CVEs in one call. FIRST caps the `cve` parameter at
+    # `Query::MAX_CVE_PARAM` characters, so this helper batches into chunks
+    # of at most `batch_size` ids (default 100) that also fit that cap, and
     # concatenates the results.
     def scores(cves : Enumerable(String), *, date : Time? = nil, batch_size : Int32 = 100) : Array(Score)
       raise ArgumentError.new("batch_size must be positive") if batch_size <= 0
       result = [] of Score
-      cves.each_slice(batch_size) do |slice|
-        query = Query.new(cves: slice.to_a, date: date, limit: slice.size)
-        resp = fetch(query)
-        result.concat(resp.scores)
+      batch = [] of String
+      cves.each do |cve|
+        id = cve.strip
+        # Joined length of `batch` plus `id`: the ids and one comma each.
+        joined = batch.sum(&.size) + batch.size + id.size
+        if !batch.empty? && (batch.size >= batch_size || joined > Query::MAX_CVE_PARAM)
+          result.concat(fetch(Query.new(cves: batch, date: date, limit: batch.size)).scores)
+          batch = [] of String
+        end
+        batch << id
       end
+      result.concat(fetch(Query.new(cves: batch, date: date, limit: batch.size)).scores) unless batch.empty?
       result
     end
 
@@ -146,7 +154,10 @@ module EPSS
       remaining = query.limit
       loop do
         size = remaining ? Math.min(page_size, remaining) : page_size
-        page_query = query.with_offset(offset).with_limit(size)
+        # Force the envelope: with `envelope=false` FIRST moves `total` /
+        # `offset` into response headers, so the bare array alone would end
+        # pagination after the first page.
+        page_query = query.with_offset(offset).with_limit(size).with_envelope(true)
         resp = fetch(page_query)
         resp.scores.each { |score| yield score }
         # Advance by the *server-reported* row count, not the flattened

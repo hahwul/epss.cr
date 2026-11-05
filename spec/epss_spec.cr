@@ -125,7 +125,7 @@ describe EPSS do
       EPSS.percentile("CVE-1").should eq(0.9)
     end
 
-    it ".top sends order=!epss and limit=N" do
+    it ".top sends sort=-epss and limit=N" do
       payload = fixture_envelope([
         {cve: "CVE-1", epss: "0.9", percentile: "0.99", date: "2026-05-18"},
       ])
@@ -133,7 +133,7 @@ describe EPSS do
       EPSS.client = EPSS::Client.new(transport: stub)
       EPSS.top(5)
       qs = stub.requests.first[0].query.not_nil!
-      qs.should contain("order=%21epss")
+      qs.should contain("sort=-epss")
       qs.should contain("limit=5")
     end
 
@@ -144,7 +144,7 @@ describe EPSS do
       EPSS.search("openssl")
       qs = stub.requests.first[0].query.not_nil!
       qs.should contain("q=openssl")
-      qs.should contain("order=%21epss")
+      qs.should contain("sort=-epss")
     end
 
     it ".scores batches a list" do

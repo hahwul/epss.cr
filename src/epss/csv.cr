@@ -21,7 +21,7 @@ module EPSS
   # The `#` line is a single metadata comment carrying the model version
   # and the publication timestamp. `CSV.parse` extracts both into a
   # `Metadata` struct and stamps every `Score` row's `date` with the
-  # feed's `score_date`.
+  # calendar day (UTC midnight) of the feed's `score_date`.
   module CSV
     extend self
 
@@ -194,6 +194,7 @@ module EPSS
 
     private def each_score_from(io : IO, & : Score, Metadata? ->) : Nil
       metadata : Metadata? = nil
+      feed_date : Time? = nil
       cve_idx = -1
       epss_idx = -1
       percentile_idx = -1
@@ -214,6 +215,11 @@ module EPSS
         # metadata for forward compatibility.
         if line.starts_with?('#')
           metadata = parse_metadata(line)
+          # `score_date` is a timestamp (v2025+ feeds carry the publish time,
+          # e.g. `T12:55:00Z`), but `Score#date` is a calendar day — the
+          # same value the API returns as `"date": "YYYY-MM-DD"`. Stamp rows
+          # with the day so a feed row equals the API row for that day.
+          feed_date = metadata.score_date.try(&.to_utc.at_beginning_of_day)
           next
         end
 
@@ -246,7 +252,7 @@ module EPSS
           cve: cells[cve_idx],
           epss: cells[epss_idx],
           percentile: cells[percentile_idx],
-          date: date_val.presence || metadata.try(&.score_date),
+          date: date_val.presence || feed_date,
         )
         yield score, metadata
       end

@@ -328,6 +328,26 @@ describe EPSS::Client do
       limits.should eq(["1000", "1000", "500"])
     end
 
+    # Regression: with `envelope=false` FIRST moves total/offset into headers,
+    # so the bare array looked like a single complete page and iteration
+    # stopped after `page_size` rows.
+    it "paginates to exhaustion when the query asks for envelope=false" do
+      stub = paging_stub(total: 5)
+      scores = EPSS::Client.new(transport: stub).all_scores(EPSS::Query.new(envelope: false), page_size: 2)
+      scores.size.should eq(5)
+      stub.requests.size.should eq(3)
+    end
+
+    # FIRST caps `cve` at 2000 characters, so a large batch_size must still
+    # split before the joined list overflows (Query raises past the cap).
+    it "#scores splits batches at FIRST's cve length cap" do
+      stub = StubTransport.from_body(fixture_envelope([] of NamedTuple(cve: String, epss: String, percentile: String, date: String)))
+      ids = (0...300).map { |i| "CVE-2021-#{40000 + i}" }
+      EPSS::Client.new(transport: stub).scores(ids, batch_size: 1000)
+      sizes = stub.requests.map { |(uri, _)| URI::Params.parse(uri.query.not_nil!)["cve"].split(',').size }
+      sizes.should eq([133, 133, 34])
+    end
+
     it "still paginates to exhaustion when the query has no limit" do
       stub = paging_stub(total: 5)
       scores = EPSS::Client.new(transport: stub).all_scores(EPSS::Query.new(epss_gt: 0.5), page_size: 2)

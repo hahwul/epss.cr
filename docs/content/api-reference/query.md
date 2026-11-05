@@ -28,7 +28,9 @@ EPSS::Query.new(
 )
 ```
 
-CVE ids are normalized to upper-case at construction.
+CVE ids are stripped and normalized to upper-case at construction.
+`order` is sent as FIRST's `sort` parameter; a leading `!` (descending)
+is translated to FIRST's `-` prefix.
 
 ## Validation
 
@@ -37,7 +39,9 @@ CVE ids are normalized to upper-case at construction.
 - any threshold (`epss_gt`, `epss_lt`, `percentile_gt`, `percentile_lt`)
   is outside `[0.0, 1.0]`;
 - `offset` is negative;
-- `limit` is non-positive.
+- `limit` is non-positive;
+- a CVE id is blank, or the comma-joined `cve` list exceeds FIRST's
+  2000-character cap (the API silently returns no rows for a longer one).
 
 ## Encoding
 

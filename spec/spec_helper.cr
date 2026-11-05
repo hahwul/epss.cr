@@ -43,6 +43,8 @@ def paging_stub(total : Int32) : StubTransport
       {cve: "CVE-#{i}", epss: "0.1", percentile: "0.5", date: "2026-05-18"}
     end
     body = fixture_envelope(rows, total: total, offset: offset, limit: limit)
+    # Like FIRST, `envelope=false` returns only the data array.
+    body = body[/"data":(\[.*\])\}\z/, 1] if params["envelope"]? == "false"
     HTTP::Client::Response.new(200, body: body)
   }
 end

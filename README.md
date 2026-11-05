@@ -51,7 +51,7 @@ EPSS.percentile("CVE-2022-27225") # => 0.40129
 ```crystal
 EPSS.top(10)                  # 10 highest-EPSS CVEs
 EPSS.above(0.95)              # every CVE above the threshold (paginated)
-EPSS.search("openssl")        # free-text search, EPSS-desc
+EPSS.search("CVE-2024-3")     # partial CVE-ID search, EPSS-desc
 EPSS.feed(Time.utc(2026, 5, 18))  # daily CSV feed
 EPSS.today_feed               # today's CSV feed
 ```
@@ -60,7 +60,7 @@ Same builders are available on `EPSS::Query` for composition:
 
 ```crystal
 EPSS::Query.top(50).with_percentile_gt(0.9)
-EPSS::Query.search("kernel").with_limit(25)
+EPSS::Query.search("CVE-2021-44").with_limit(25)
 EPSS::Query.above(0.5).with_order("!epss")
 EPSS::Query.for_cve("CVE-2022-27225")
 EPSS::Query.recent(7)
