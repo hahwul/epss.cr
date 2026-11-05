@@ -62,8 +62,10 @@ feed.select { |s| s.epss > 0.5 }
 
 ## Date handling
 
-Every row in `Feed#scores` is stamped with the `score_date` from the
-file's metadata header (rows in the feed itself don't carry per-row
+Every row in `Feed#scores` is stamped with the calendar day (UTC
+midnight) of the `score_date` in the file's metadata header — the same
+value the API returns as `date` — while `Feed#metadata.score_date` keeps
+the full publish timestamp (rows in the feed itself don't carry per-row
 dates). If you parse a feed that omits the `#` header — for example, a
 hand-trimmed local copy — `Score#date` is `nil` and you'll need to set
 it yourself.

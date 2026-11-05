@@ -77,6 +77,8 @@ column, which the public feed does not).
 ## Date handling
 
 The public feed format publishes one `score_date` for the whole file.
-Every `Score` in `Feed#scores` is stamped with that date. The streaming
+Every `Score` in `Feed#scores` is stamped with that date's calendar day
+(UTC midnight), matching the API's `date`; `Metadata#score_date` keeps
+the full timestamp. The streaming
 form (`each_score`) does the same — the metadata seen so far is applied
 to each row as it's yielded.

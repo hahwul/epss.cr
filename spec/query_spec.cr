@@ -29,7 +29,17 @@ describe EPSS::Query do
       params = q.to_params.to_h
       params["offset"].should eq("100")
       params["limit"].should eq("50")
-      params["order"].should eq("!epss")
+      params["sort"].should eq("-epss")
+    end
+
+    # Regression: FIRST documents only the global `sort` parameter (`-` for
+    # descending) and silently ignores `order=` and a `!` prefix, so every
+    # "top N" query came back in CVE-id order instead of by EPSS.
+    it "sends order as FIRST's sort parameter with a '-' descending prefix" do
+      EPSS::Query.new(order: "!epss").to_params.should eq([{"sort", "-epss"}])
+      EPSS::Query.new(order: "-percentile").to_params.should eq([{"sort", "-percentile"}])
+      EPSS::Query.new(order: "epss").to_params.should eq([{"sort", "epss"}])
+      EPSS::Query.top(10).to_query_string.should eq("sort=-epss&limit=10")
     end
 
     it "emits decimal notation for small thresholds (no scientific form)" do
@@ -90,6 +100,22 @@ describe EPSS::Query do
       expect_raises(EPSS::ParseError, "blank CVE id") { EPSS::Query.new(cves: [""]) }
       expect_raises(EPSS::ParseError, "blank CVE id") { EPSS::Query.for_cve("") }
       expect_raises(EPSS::ParseError, "blank CVE id") { EPSS::Query.new.with_cves(["CVE-1", ""]) }
+    end
+
+    # Regression: FIRST caps `cve` at 2000 characters and answers a longer
+    # value with `total: 0` instead of an error.
+    it "rejects a cve parameter longer than FIRST's 2000-character cap" do
+      ids = (0...133).map { |i| "CVE-2021-#{40000 + i}" } # 133*14 + 132 = 1994
+      EPSS::Query.new(cves: ids).to_params.first[1].size.should eq(1994)
+      expect_raises(EPSS::ParseError, /2000/) do
+        EPSS::Query.new(cves: ids + ["CVE-2021-99999"])
+      end
+    end
+
+    # Regression: FIRST matches nothing for an id with leading whitespace.
+    it "strips whitespace around CVE ids" do
+      EPSS::Query.new(cves: [" cve-2022-27225\n"]).cves.should eq(["CVE-2022-27225"])
+      expect_raises(EPSS::ParseError, "blank CVE id") { EPSS::Query.new(cves: ["  "]) }
     end
 
     it "rejects non-positive days" do
@@ -155,7 +181,7 @@ describe EPSS::Query do
       params = q.to_params.to_h
       params["q"].should eq("openssl")
       params["scope"].should eq("time-series")
-      params["order"].should eq("!epss")
+      params["sort"].should eq("-epss")
       params["days"].should eq("7")
       params["epss-gt"].should eq("0.1")
       params["epss-lt"].should eq("0.9")

@@ -24,6 +24,25 @@ describe EPSS::CSV do
       first.date.should eq(feed.metadata.score_date)
     end
 
+    # Regression: v2025+ feeds carry the publish *time* in score_date
+    # (e.g. `T12:55:00Z`). Rows were stamped with that instant, so a feed
+    # score never equalled the API score for the same day (which carries
+    # `"date": "YYYY-MM-DD"`) nor survived a JSON round-trip.
+    it "stamps rows with the calendar day of a timestamped score_date" do
+      csv = <<-CSV
+        #model_version:v2025.03.14,score_date:2025-03-17T12:55:00Z
+        cve,epss,percentile
+        CVE-1999-0001,0.07126,0.90885
+        CSV
+
+      feed = EPSS::CSV.parse(csv)
+      feed.metadata.score_date.should eq(Time.utc(2025, 3, 17, 12, 55, 0))
+      score = feed.scores.first
+      score.date.should eq(Time.utc(2025, 3, 17))
+      EPSS.from_json(score.to_json).first.should eq(score)
+      score.should eq(EPSS::Score.from_row("CVE-1999-0001", "0.071260000", "0.908850000", "2025-03-17"))
+    end
+
     it "is Enumerable over scores" do
       csv = <<-CSV
         #model_version:v2025.03.14,score_date:2026-05-18T00:00:00+0000

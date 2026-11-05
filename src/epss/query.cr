@@ -12,11 +12,17 @@ module EPSS
   # exposed publicly so consumers can build URLs without going through
   # the HTTP client (useful for caching layers and offline tooling).
   struct Query
-    # CVE IDs to filter on. Normalized to upper-case at construction so
+    # CVE IDs to filter on. Stripped and upper-cased at construction so
     # comparisons against `query.cves` are predictable; the FIRST API
-    # itself is case-insensitive on CVE ids. The list is joined with `,`
-    # at request time.
+    # itself is case-insensitive on CVE ids but matches nothing for an id
+    # with leading whitespace. The list is joined with `,` at request time.
+    # FIRST caps the joined value at `MAX_CVE_PARAM` characters.
     getter cves : Array(String)
+
+    # FIRST's documented ceiling for the `cve` parameter, commas included.
+    # A longer value is not rejected by the server — it silently matches
+    # nothing — so `Query` refuses to build one.
+    MAX_CVE_PARAM = 2000
 
     # Specific publication date to query historical scores for.
     getter date : Time?
@@ -33,13 +39,17 @@ module EPSS
     getter epss_lt : Float64?
     getter percentile_lt : Float64?
 
-    # Free-form text query (matches CVE descriptions in the FIRST index).
+    # Free-text search on the CVE ID (FIRST's `q`, partial matches allowed —
+    # e.g. `"CVE-2024-3"`). It does not search descriptions.
     getter q : String?
 
     # Scope: `"time-series"` enables the 30-day series view.
     getter scope : String?
 
-    # Sort order — e.g. `"!epss"` for descending by EPSS, `"epss"` for asc.
+    # Sort order — e.g. `"!epss"` (or `"-epss"`) for descending by EPSS,
+    # `"epss"` for ascending. Sent as FIRST's global `sort` parameter, whose
+    # descending prefix is `-`: the API silently ignores an `order`
+    # parameter and a `!` prefix, so a leading `!` is translated to `-`.
     getter order : String?
 
     # Pagination.
@@ -80,7 +90,7 @@ module EPSS
       @pretty : Bool? = nil,
       @envelope : Bool? = nil,
     )
-      @cves = @cves.map(&.upcase)
+      @cves = @cves.map(&.strip.upcase)
       validate!
     end
 
@@ -121,10 +131,10 @@ module EPSS
       new(epss_lt: threshold)
     end
 
-    # Free-text search query, sorted by EPSS descending.
+    # Partial CVE-ID search, sorted by EPSS descending.
     #
     # ```
-    # EPSS::Query.search("openssl")
+    # EPSS::Query.search("CVE-2024-3")
     # ```
     def self.search(text : String) : Query
       new(q: text, order: "!epss")
@@ -236,7 +246,7 @@ module EPSS
         params << {"scope", v}
       end
       if v = @order
-        params << {"order", v}
+        params << {"sort", v.gsub(/(\A|,)!/, "\\1-")}
       end
       if v = @offset
         params << {"offset", v.to_s}
@@ -268,6 +278,10 @@ module EPSS
       # FIRST treats an empty `cve=` as "no filter" and returns the whole
       # population, so a blank id must never reach the wire.
       raise ParseError.new("blank CVE id") if @cves.any?(&.empty?)
+      cve_param = @cves.sum(&.size) + Math.max(@cves.size - 1, 0)
+      if cve_param > MAX_CVE_PARAM
+        raise ParseError.new("cve parameter is #{cve_param} characters; FIRST accepts at most #{MAX_CVE_PARAM}")
+      end
       if (v = @epss_gt) && !v.in?(0.0..1.0)
         raise ParseError.new("epss_gt out of range: #{v}")
       end
