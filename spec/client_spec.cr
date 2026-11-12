@@ -42,6 +42,43 @@ describe EPSS::Client do
       end
     end
 
+    # Live FIRST answers a `date` with no published scores with HTTP 422 and
+    # `"message":["listNoResults"]`; the reason belonged in the error.
+    it "surfaces the error envelope's message on a non-2xx response" do
+      body = %({"status":"Unprocessable Entity","status-code":422,"version":"1.0","access":"public","message":["listNoResults"],"data":{"error":["listNoResults"]}})
+      client = EPSS::Client.new(transport: StubTransport.from_body(body, status: 422), max_retries: 0)
+      ex = expect_raises(EPSS::APIError, "EPSS API request failed: HTTP 422: listNoResults") do
+        client.score("CVE-2022-27225", date: Time.utc(2020, 1, 1))
+      end
+      ex.status.should eq(422)
+      ex.body.should eq(body)
+    end
+
+    it "raises ParseError (not JSON::ParseException) on a non-JSON 200 body" do
+      client = EPSS::Client.new(transport: StubTransport.from_body("<html>portal</html>"))
+      expect_raises(EPSS::ParseError, /non-JSON/) { client.fetch }
+    end
+
+    it "keeps the envelope message when retries run out" do
+      body = %({"status":"Too Many Requests","status-code":429,"message":["rateLimited"]})
+      client = EPSS::Client.new(transport: StubTransport.from_body(body, status: 429), max_retries: 0)
+      expect_raises(EPSS::APIError, "HTTP 429: rateLimited") { client.fetch }
+    end
+
+    # Live `envelope=false` returns a bare array and puts the paging fields
+    # in `x-total` / `x-offset` / `x-limit`; the body alone reports
+    # `total == rows`, hiding every later page.
+    it "reads total/offset/limit from headers when envelope=false" do
+      body = %([{"cve":"CVE-1","epss":"0.1","percentile":"0.5","date":"2026-11-10"},{"cve":"CVE-2","epss":"0.1","percentile":"0.5","date":"2026-11-10"}])
+      headers = HTTP::Headers{"X-Total" => "402773", "X-Offset" => "10", "X-Limit" => "2"}
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        HTTP::Client::Response.new(200, body: body, headers: headers)
+      }
+      resp = EPSS::Client.new(transport: stub).fetch(EPSS::Query.new(offset: 10, limit: 2, envelope: false))
+      {resp.total, resp.offset, resp.limit, resp.size}.should eq({402773, 10, 2, 2})
+      resp.more?.should be_true
+    end
+
     it "honors Retry-After header (seconds) on 429" do
       attempts = 0
       slept = false

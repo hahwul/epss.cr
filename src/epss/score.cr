@@ -169,7 +169,9 @@ module EPSS
       else
         raise ParseError.new("invalid date value '#{value}'")
       end
-    rescue Time::Format::Error
+    rescue Time::Format::Error | ArgumentError
+      # `ArgumentError` is what `Time.parse` raises for a well-formed but
+      # impossible date such as `2026-02-30`.
       raise ParseError.new("invalid date value '#{value}'")
     end
   end

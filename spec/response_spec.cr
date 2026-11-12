@@ -59,5 +59,13 @@ describe EPSS::Response do
       payload = %({"status":"OK","status-code":200,"version":"1.0","access":"public","total":1,"offset":0,"limit":100,"data":[{"cve":"CVE-1","epss":"0.1","percentile":"0.5"}]})
       EPSS::Response.from_json(IO::Memory.new(payload)).scores.size.should eq(1)
     end
+
+    # FIRST's live error envelope carries `message` as an array of strings.
+    it "reads an error envelope's message array" do
+      payload = %({"status":"Unprocessable Entity","status-code":422,"version":"1.0","access":"public","message":["listNoResults"],"data":{"error":["listNoResults"]}})
+      expect_raises(EPSS::APIError, "listNoResults") do
+        EPSS::Response.from_json(payload)
+      end
+    end
   end
 end
