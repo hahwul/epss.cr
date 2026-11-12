@@ -38,7 +38,7 @@ module EPSS
       @offset : Int32,
       @limit : Int32,
       @scores : Array(Score),
-      @row_count : Int32 = @scores.size,
+      @row_count : Int32 = scores.size,
     )
     end
 
@@ -54,7 +54,9 @@ module EPSS
     # server-reported `offset + row_count` against `total`, so this stays
     # correct even when time-series flattening inflates `scores`.
     def more? : Bool
-      @offset + @row_count < @total
+      # Int64: `offset` is any Int32 a payload carries, so the Int32 sum
+      # can overflow.
+      @offset.to_i64 + @row_count < @total
     end
 
     # Decode a FIRST EPSS API JSON payload. Raises `EPSS::APIError` if the

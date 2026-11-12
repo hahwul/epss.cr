@@ -94,13 +94,9 @@ module EPSS
           # Constructed inside the translation block: the reader validates
           # the gzip header eagerly, so a corrupt one raises right here.
           io = gzipped ? Compress::Gzip::Reader.new(source) : source
-          metadata = Metadata.new
           scores = [] of Score
-          each_score_from(io, date) do |score, meta|
-            metadata = meta if meta
-            scores << score
-          end
-          Feed.new(metadata, scores)
+          metadata = each_score_from(io, date) { |score| scores << score }
+          Feed.new(metadata || Metadata.new, scores)
         end
       ensure
         # Only close handles we opened ourselves; a caller-supplied IO is
@@ -130,7 +126,7 @@ module EPSS
           # See `parse`: the reader must be built inside the translation
           # block so a corrupt gzip header surfaces as `ParseError`.
           io = gzipped ? Compress::Gzip::Reader.new(source) : source
-          each_score_from(io, date) { |score, _| yield score }
+          each_score_from(io, date) { |score| yield score }
         end
       ensure
         # See `parse`: close only what we opened, never the caller's IO.
@@ -199,7 +195,8 @@ module EPSS
 
     private BOM = "\xEF\xBB\xBF"
 
-    private def each_score_from(io : IO, fallback : Time?, & : Score, Metadata? ->) : Nil
+    # Returns the feed's metadata, which a feed with no rows also has.
+    private def each_score_from(io : IO, fallback : Time?, & : Score ->) : Metadata?
       metadata : Metadata? = nil
       # The calendar day as given (not shifted to UTC), so it names the
       # same day `feed_url` put in the file name.
@@ -264,8 +261,9 @@ module EPSS
           percentile: cells[percentile_idx],
           date: date_val.presence || feed_date,
         )
-        yield score, metadata
+        yield score
       end
+      metadata
     end
 
     private def validate_headers(headers : Array(String)) : Nil

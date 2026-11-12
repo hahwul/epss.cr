@@ -64,6 +64,15 @@ describe EPSS::CSV do
       feed.scores.first.date.should be_nil
     end
 
+    # The metadata used to be picked up only alongside a row, so a feed with
+    # a `#` line but no rows reported empty metadata.
+    it "keeps the metadata of a feed with no rows" do
+      feed = EPSS::CSV.parse("#model_version:v2025.03.14,score_date:2026-05-18T12:00:22Z\ncve,epss,percentile\n")
+      feed.size.should eq(0)
+      feed.metadata.model_version.should eq("v2025.03.14")
+      feed.metadata.score_date.should eq(Time.utc(2026, 5, 18, 12, 0, 22))
+    end
+
     it "rejects CSVs missing required columns" do
       expect_raises(EPSS::ParseError, /required columns/) do
         EPSS::CSV.parse("cve,score\nCVE-1,0.1\n")

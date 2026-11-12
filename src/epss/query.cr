@@ -58,8 +58,9 @@ module EPSS
 
     # Comma-separated list of fields to return. Maps to FIRST's global
     # `fields` query param — request a projected payload (e.g.
-    # `"cve,epss"`) to skip percentile/date when the caller doesn't need
-    # them.
+    # `"cve,epss,percentile"`) to skip `date`. `Response` needs `cve`,
+    # `epss` and `percentile` in every row and raises `ParseError` when a
+    # projection leaves one out.
     getter fields : Array(String)?
 
     # Request pretty-printed JSON. Off by default (extra whitespace is
