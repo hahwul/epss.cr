@@ -22,6 +22,17 @@
   does, so `Response.from_json(resp.to_json)` keeps `row_count` and
   `more?`, not just the scores.
 
+### Fixed
+
+- `Response.new` without `row_count:` compiles again; it defaults to
+  `scores.size` as documented.
+- `Response#more?` no longer raises `OverflowError` when a payload's
+  `offset` is near `Int32::MAX`.
+- `CSV.parse` keeps the `#` metadata of a feed that has no rows.
+- The `fields` projection example asked for `cve,epss`, which always
+  raised `ParseError` (`percentile` is required). It now keeps
+  `percentile`, and the docs say which fields a projection must keep.
+
 ## v0.2.0
 
 - Expose the FIRST API global parameters `fields`, `pretty`, and

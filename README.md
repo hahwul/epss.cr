@@ -41,7 +41,7 @@ if score = EPSS.score("CVE-2022-27225")
 end
 
 # Pluck just one field
-EPSS.band("CVE-2022-27225")       # => EPSS::Band::Low
+EPSS.band("CVE-2022-27225")       # => EPSS::Band::None
 EPSS.epss("CVE-2022-27225")       # => 0.00187
 EPSS.percentile("CVE-2022-27225") # => 0.40129
 ```
@@ -118,19 +118,25 @@ feed.metadata.score_date    # => Time(2026-05-18)
 ### Field projection
 
 Request a partial payload via the FIRST API's `fields` parameter to skip
-percentile/date when the caller doesn't need them:
+`date` when the caller doesn't need it:
 
 ```crystal
 query = EPSS::Query.new
   .with_epss_gt(0.95)
   .with_order("!epss")
-  .with_fields(["cve", "epss"])
+  .with_fields(["cve", "epss", "percentile"])
 ```
+
+Keep `cve`, `epss` and `percentile`: every `Score` needs them, so rows
+projected without one raise `EPSS::ParseError`. A projection also drops
+the `time-series` entries of a `scope=time-series` query.
 
 `Query` also exposes `with_pretty(true)` and `with_envelope(false)` for
 the other FIRST global parameters. With `envelope=false` the API answers
-with a bare row array; `Response` decodes that too, reporting it as a
-single complete page (there is no `total` to paginate against).
+with a bare row array and moves `total` / `offset` / `limit` into the
+`X-Total` / `X-Offset` / `X-Limit` response headers. `Client#fetch` reads
+them back; `Response.from_json` on the bare array alone reports a single
+complete page.
 
 ### JSON round-trip
 

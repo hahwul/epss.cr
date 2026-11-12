@@ -68,4 +68,25 @@ describe EPSS::Response do
       end
     end
   end
+
+  describe ".new" do
+    # `row_count` defaults to `scores.size`; the default used to read
+    # `@scores` before it was assigned, so omitting it did not compile.
+    it "defaults row_count to the score count" do
+      score = EPSS::Score.new("CVE-1", 0.1, 0.5)
+      resp = EPSS::Response.new(status: "OK", status_code: 200, version: "1.0", access: "public",
+        total: 3, offset: 0, limit: 100, scores: [score, score])
+      resp.row_count.should eq(2)
+      resp.more?.should be_true
+    end
+  end
+
+  describe "#more?" do
+    # `offset` is any Int32 the payload carries; `offset + row_count` must
+    # not overflow on a value near Int32::MAX.
+    it "does not overflow on an offset near Int32::MAX" do
+      payload = %({"status":"OK","status-code":200,"version":"1.0","access":"public","total":5,"offset":2147483647,"limit":100,"data":[{"cve":"CVE-1","epss":"0.1","percentile":"0.5"}]})
+      EPSS::Response.from_json(payload).more?.should be_false
+    end
+  end
 end
