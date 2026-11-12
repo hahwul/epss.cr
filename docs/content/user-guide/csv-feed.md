@@ -68,7 +68,9 @@ value the API returns as `date` — while `Feed#metadata.score_date` keeps
 the full publish timestamp (rows in the feed itself don't carry per-row
 dates). Feeds before 2022-02-04 have no `#` header; `fetch_feed(date)`
 stamps their rows with the day you asked for. When parsing such a file
-yourself, pass the day with `date:` — otherwise `Score#date` is `nil`:
+yourself, pass the day with `date:` — otherwise `Score#date` is `nil`.
+(Feeds before 2021-09-01 also lack the `percentile` column and are
+rejected with `ParseError`.)
 
 ```crystal
 feed = EPSS::CSV.parse(File.read("epss_scores-2022-02-03.csv.gz"), date: Time.utc(2022, 2, 3))

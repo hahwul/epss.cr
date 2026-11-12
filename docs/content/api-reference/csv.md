@@ -75,7 +75,8 @@ none), `Feed#metadata` is empty and per-row `Score#date` is the optional
 `date:` argument's calendar day, or `nil` when none is given. A file's own
 `score_date` or `date` column always wins over `date:`.
 `Client#fetch_feed(date)` passes the requested day, so old feeds come back
-dated.
+dated. Feeds before 2021-09-01 have no `percentile` column at all
+(`cve,epss`) and still raise `ParseError` (missing required column).
 
 ## Date handling
 

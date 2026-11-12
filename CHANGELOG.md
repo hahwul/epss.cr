@@ -15,7 +15,9 @@
 - `CSV.parse` / `CSV.each_score` take an optional `date:` fallback that
   is stamped onto rows when the feed has no `score_date` (feeds before
   2022-02-04 have no `#` metadata line). `Client#fetch_feed(date)` passes
-  the requested day, so old feeds no longer yield `date = nil`.
+  the requested day, so 2021-09-01..2022-02-03 feeds no longer yield
+  `date = nil`. (Earlier feeds have no `percentile` column and still
+  raise `ParseError`.)
 - `Response#to_json` writes time-series pages nested the way the API
   does, so `Response.from_json(resp.to_json)` keeps `row_count` and
   `more?`, not just the scores.
