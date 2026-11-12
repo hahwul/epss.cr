@@ -54,6 +54,17 @@ describe EPSS::Client do
       ex.body.should eq(body)
     end
 
+    it "raises ParseError (not JSON::ParseException) on a non-JSON 200 body" do
+      client = EPSS::Client.new(transport: StubTransport.from_body("<html>portal</html>"))
+      expect_raises(EPSS::ParseError, /non-JSON/) { client.fetch }
+    end
+
+    it "keeps the envelope message when retries run out" do
+      body = %({"status":"Too Many Requests","status-code":429,"message":["rateLimited"]})
+      client = EPSS::Client.new(transport: StubTransport.from_body(body, status: 429), max_retries: 0)
+      expect_raises(EPSS::APIError, "HTTP 429: rateLimited") { client.fetch }
+    end
+
     # Live `envelope=false` returns a bare array and puts the paging fields
     # in `x-total` / `x-offset` / `x-limit`; the body alone reports
     # `total == rows`, hiding every later page.

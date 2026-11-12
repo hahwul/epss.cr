@@ -92,7 +92,12 @@ module EPSS
     # iterate pages — use `#each_score` or `#all_scores` for that.
     def fetch(query : Query = Query.new) : Response
       http = perform_get(build_uri(query))
-      resp = Response.from_json(http.body)
+      begin
+        resp = Response.from_json(http.body)
+      rescue ex : ::JSON::ParseException
+        # A 200 that is not JSON (captive portal, truncated proxy reply).
+        raise ParseError.new("EPSS API returned a non-JSON body: #{ex.message}", cause: ex)
+      end
       return resp unless query.envelope == false
 
       # With `envelope=false` FIRST returns the bare data array and moves the
@@ -104,7 +109,7 @@ module EPSS
         version: resp.version,
         access: resp.access,
         total: header_int(http.headers, "X-Total") || resp.total,
-        offset: header_int(http.headers, "X-Offset") || resp.offset,
+        offset: header_int(http.headers, "X-Offset") || query.offset || resp.offset,
         limit: header_int(http.headers, "X-Limit") || resp.limit,
         row_count: resp.row_count,
         scores: resp.scores,
@@ -170,8 +175,8 @@ module EPSS
       loop do
         size = remaining ? Math.min(page_size, remaining) : page_size
         # Force the envelope: with `envelope=false` FIRST moves `total` /
-        # `offset` into response headers, so the bare array alone would end
-        # pagination after the first page.
+        # `offset` into response headers, and `fetch` can only recover them
+        # when a proxy has not stripped those headers.
         page_query = query.with_offset(offset).with_limit(size).with_envelope(true)
         resp = fetch(page_query)
         resp.scores.each { |score| yield score }
@@ -221,6 +226,13 @@ module EPSS
       uri
     end
 
+    # FIRST answers some requests (e.g. a `date` with no published scores,
+    # HTTP 422) with an error envelope whose `message` says why.
+    private def failure_message(response : HTTP::Client::Response) : String
+      detail = Response.error_message(response.body).try { |m| ": #{m}" }
+      "EPSS API request failed: HTTP #{response.status_code}#{detail}"
+    end
+
     private def header_int(headers : HTTP::Headers, name : String) : Int32?
       headers[name]?.try(&.strip.to_i32?).try { |v| v >= 0 ? v : nil }
     end
@@ -257,7 +269,7 @@ module EPSS
           when 429, 500, 502, 503, 504
             if attempt > @max_retries
               raise APIError.new(
-                "EPSS API request failed: HTTP #{response.status_code}",
+                failure_message(response),
                 status: response.status_code,
                 body: response.body,
               )
@@ -270,11 +282,8 @@ module EPSS
               sleep_backoff(attempt)
             end
           else
-            # FIRST answers some requests (e.g. a `date` with no published
-            # scores) with an error envelope whose `message` says why.
-            detail = Response.error_message(response.body).try { |m| ": #{m}" }
             raise APIError.new(
-              "EPSS API request failed: HTTP #{response.status_code}#{detail}",
+              failure_message(response),
               status: response.status_code,
               body: response.body,
             )

@@ -124,6 +124,7 @@ module EPSS
       )
     end
 
+    # :nodoc:
     # The `message` of a FIRST error envelope in `body`, or `nil` when `body`
     # is not one. FIRST sends `message` as an array of strings (e.g.
     # `["listNoResults"]` with HTTP 422), so both shapes are accepted.
