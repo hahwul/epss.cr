@@ -91,9 +91,24 @@ module EPSS
     # Issue a single request and return the decoded `Response`. Does not
     # iterate pages — use `#each_score` or `#all_scores` for that.
     def fetch(query : Query = Query.new) : Response
-      uri = build_uri(query)
-      raw = perform_get(uri)
-      Response.from_json(raw)
+      http = perform_get(build_uri(query))
+      resp = Response.from_json(http.body)
+      return resp unless query.envelope == false
+
+      # With `envelope=false` FIRST returns the bare data array and moves the
+      # envelope's paging fields into `X-Total` / `X-Offset` / `X-Limit`
+      # response headers, so the body alone would report `total == size`.
+      Response.new(
+        status: resp.status,
+        status_code: resp.status_code,
+        version: resp.version,
+        access: resp.access,
+        total: header_int(http.headers, "X-Total") || resp.total,
+        offset: header_int(http.headers, "X-Offset") || resp.offset,
+        limit: header_int(http.headers, "X-Limit") || resp.limit,
+        row_count: resp.row_count,
+        scores: resp.scores,
+      )
     end
 
     # Return the (at most one) score for a single CVE on the latest day,
@@ -195,8 +210,7 @@ module EPSS
     # ```
     def fetch_feed(date : Time, *, host : String = CSV::FEED_HOST) : CSV::Feed
       uri = CSV.feed_url(date, host: host)
-      raw = perform_get(uri)
-      CSV.parse(IO::Memory.new(raw))
+      CSV.parse(IO::Memory.new(perform_get(uri).body))
     end
 
     # Compose the absolute URI for a query against this client's base.
@@ -207,7 +221,11 @@ module EPSS
       uri
     end
 
-    private def perform_get(uri : URI) : String
+    private def header_int(headers : HTTP::Headers, name : String) : Int32?
+      headers[name]?.try(&.strip.to_i32?).try { |v| v >= 0 ? v : nil }
+    end
+
+    private def perform_get(uri : URI) : HTTP::Client::Response
       headers = HTTP::Headers{
         "User-Agent" => @user_agent,
         "Accept"     => "application/json",
@@ -223,7 +241,7 @@ module EPSS
           response = @transport.get(target, headers)
           case response.status_code
           when 200
-            return response.body
+            return response
           when 301, 302, 303, 307, 308
             redirects += 1
             if redirects > MAX_REDIRECTS
@@ -252,8 +270,11 @@ module EPSS
               sleep_backoff(attempt)
             end
           else
+            # FIRST answers some requests (e.g. a `date` with no published
+            # scores) with an error envelope whose `message` says why.
+            detail = Response.error_message(response.body).try { |m| ": #{m}" }
             raise APIError.new(
-              "EPSS API request failed: HTTP #{response.status_code}",
+              "EPSS API request failed: HTTP #{response.status_code}#{detail}",
               status: response.status_code,
               body: response.body,
             )

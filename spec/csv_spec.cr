@@ -128,6 +128,17 @@ describe EPSS::CSV do
       feed.metadata.score_date.not_nil!.to_s("%Y-%m-%d").should eq("2026-05-18")
     end
 
+    # Both escaped as raw ArgumentError: `Regex#match` on invalid UTF-8 and
+    # `Time.parse` on an impossible timestamp.
+    it "tolerates invalid UTF-8 and impossible timestamps in the metadata line" do
+      {"#model_version:v\xff1,score_date:2026-05-18T00:00:00Z",
+       "#model_version:v1,score_date:2026-02-30T00:00:00Z",
+       "#model_version:v1,score_date:2026-01-01T25:00:00+0000"}.each do |meta|
+        feed = EPSS::CSV.parse("#{meta}\ncve,epss,percentile\nCVE-1,0.1,0.5\n")
+        feed.size.should eq(1)
+      end
+    end
+
     it "auto-detects gzip input" do
       raw = <<-CSV
         #model_version:v2025.03.14,score_date:2026-05-18T00:00:00+0000

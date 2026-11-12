@@ -264,7 +264,8 @@ module EPSS
     end
 
     private def parse_metadata(line : String) : Metadata
-      body = line.lchop('#').strip
+      # Scrubbed: `Regex#match` raises `ArgumentError` on invalid UTF-8.
+      body = line.lchop('#').strip.scrub
       model = MODEL_RE.match(body).try &.[1]
       date_str = METADATA_RE.match(body).try &.[1]
       score_date = parse_metadata_date(date_str)
@@ -275,13 +276,15 @@ module EPSS
       return if value.nil? || value.empty?
       str = value
       # The feed emits an ISO-8601 timestamp like "2026-05-18T00:00:00+0000".
+      # A well-formed but impossible value (`2026-02-30`, hour 25) raises
+      # `ArgumentError` rather than `Time::Format::Error`.
       begin
         return Time.parse_rfc3339(str)
-      rescue Time::Format::Error
+      rescue Time::Format::Error | ArgumentError
       end
       begin
         return Time.parse(str, "%Y-%m-%dT%H:%M:%S%z", Time::Location::UTC)
-      rescue Time::Format::Error
+      rescue Time::Format::Error | ArgumentError
       end
       nil
     end

@@ -56,6 +56,16 @@ describe EPSS::Score do
         EPSS::Score.from_row(cve: "CVE-1", epss: "0.1", percentile: "0.2", date: "2026/05/18")
       end
     end
+
+    # `Time.parse` raises ArgumentError (not Time::Format::Error) for an
+    # impossible calendar date, which escaped as a raw ArgumentError.
+    it "raises ParseError on a well-formed but impossible date" do
+      {"2026-02-30", "2026-13-01"}.each do |date|
+        expect_raises(EPSS::ParseError, /date/) do
+          EPSS.from_json(%({"cve":"CVE-1","epss":"0.1","percentile":"0.2","date":"#{date}"}))
+        end
+      end
+    end
   end
 
   describe "#band" do

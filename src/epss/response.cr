@@ -95,7 +95,7 @@ module EPSS
       status_code = int(obj, "status-code")
 
       if status != "OK" || status_code != 200
-        message = obj["message"]?.try(&.as_s?) || "EPSS API error"
+        message = message_of(obj) || "EPSS API error"
         raise APIError.new(message, status: status_code, body: body)
       end
 
@@ -122,6 +122,25 @@ module EPSS
         row_count: row_count,
         scores: scores,
       )
+    end
+
+    # The `message` of a FIRST error envelope in `body`, or `nil` when `body`
+    # is not one. FIRST sends `message` as an array of strings (e.g.
+    # `["listNoResults"]` with HTTP 422), so both shapes are accepted.
+    def self.error_message(body : String) : String?
+      ::JSON.parse(body).as_h?.try { |obj| message_of(obj) }
+    rescue ::JSON::ParseException
+      nil
+    end
+
+    private def self.message_of(obj : Hash(String, ::JSON::Any)) : String?
+      node = obj["message"]?
+      return unless node
+      if list = node.as_a?
+        list.compact_map(&.as_s?).join(", ").presence
+      else
+        node.as_s?.presence
+      end
     end
 
     private def self.scores_from_data_row(node : ::JSON::Any) : Array(Score)
