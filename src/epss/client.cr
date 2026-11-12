@@ -90,8 +90,29 @@ module EPSS
 
     # Issue a single request and return the decoded `Response`. Does not
     # iterate pages — use `#each_score` or `#all_scores` for that.
+    #
+    # FIRST answers a `date` it has no scores for (before EPSS began, or a
+    # day not yet published) with HTTP 422 `"message":["listNoResults"]`
+    # instead of an empty page. That one case is returned as an empty
+    # `Response` with `total == 0`; every other 422 still raises `APIError`.
     def fetch(query : Query = Query.new) : Response
-      http = perform_get(build_uri(query))
+      http = begin
+        perform_get(build_uri(query))
+      rescue ex : APIError
+        raise ex unless ex.status == 422 && ex.body.try { |b| Response.error_message(b) } == "listNoResults"
+        return Response.new(
+          status: "OK",
+          status_code: 200,
+          version: "1.0",
+          access: "public",
+          total: 0,
+          offset: query.offset || 0,
+          # 100 is the page size FIRST reports when `limit` is not sent.
+          limit: query.limit || 100,
+          row_count: 0,
+          scores: [] of Score,
+        )
+      end
       begin
         resp = Response.from_json(http.body)
       rescue ex : ::JSON::ParseException
@@ -215,7 +236,9 @@ module EPSS
     # ```
     def fetch_feed(date : Time, *, host : String = CSV::FEED_HOST) : CSV::Feed
       uri = CSV.feed_url(date, host: host)
-      CSV.parse(IO::Memory.new(perform_get(uri).body))
+      # Feeds before 2022-02-04 have no `#model_version` line to date the
+      # rows, so fall back to the day that was asked for.
+      CSV.parse(IO::Memory.new(perform_get(uri).body), date: date)
     end
 
     # Compose the absolute URI for a query against this client's base.

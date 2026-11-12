@@ -59,3 +59,14 @@ Decode a FIRST EPSS JSON payload. Raises:
 The `time-series` array nested inside each data row (when
 `scope=time-series`) is expanded into additional `Score`s in the
 returned `scores` list — each with the parent's `cve` copied over.
+
+## Serializing
+
+### `#to_json : String`
+
+Write the response back in the FIRST envelope shape.
+`Response.from_json(resp.to_json)` gives the same `scores`, `total`,
+`offset`, `limit`, and `row_count`, so `more?` survives the round trip.
+A time-series response is written nested again (each row's daily entries
+in its `time-series` array, without a `cve` key), so `data.size` equals
+`row_count`.

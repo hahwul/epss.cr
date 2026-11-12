@@ -81,7 +81,12 @@ module EPSS
 
     # Parse an entire EPSS feed from a string, IO, or path. Gzip-compressed
     # input is auto-detected by the magic bytes `1f 8b`.
-    def parse(input : String | IO | Path) : Feed
+    #
+    # `date` is the day stamped onto rows when the feed itself carries no
+    # `score_date` (feeds before 2022-02-04 have no `#` metadata line).
+    # A `score_date` in the file, or a `date` column, always wins.
+    # `Feed#metadata` still reports only what the file says.
+    def parse(input : String | IO | Path, *, date : Time? = nil) : Feed
       source = open_io(input)
       gzipped = gzip?(source)
       begin
@@ -91,7 +96,7 @@ module EPSS
           io = gzipped ? Compress::Gzip::Reader.new(source) : source
           metadata = Metadata.new
           scores = [] of Score
-          each_score_from(io) do |score, meta|
+          each_score_from(io, date) do |score, meta|
             metadata = meta if meta
             scores << score
           end
@@ -115,7 +120,9 @@ module EPSS
     #   end
     # end
     # ```
-    def each_score(input : String | IO | Path, & : Score ->) : Nil
+    #
+    # `date` is the fallback row date, as for `parse`.
+    def each_score(input : String | IO | Path, *, date : Time? = nil, & : Score ->) : Nil
       source = open_io(input)
       gzipped = gzip?(source)
       begin
@@ -123,7 +130,7 @@ module EPSS
           # See `parse`: the reader must be built inside the translation
           # block so a corrupt gzip header surfaces as `ParseError`.
           io = gzipped ? Compress::Gzip::Reader.new(source) : source
-          each_score_from(io) { |score, _| yield score }
+          each_score_from(io, date) { |score, _| yield score }
         end
       ensure
         # See `parse`: close only what we opened, never the caller's IO.
@@ -192,9 +199,12 @@ module EPSS
 
     private BOM = "\xEF\xBB\xBF"
 
-    private def each_score_from(io : IO, & : Score, Metadata? ->) : Nil
+    private def each_score_from(io : IO, fallback : Time?, & : Score, Metadata? ->) : Nil
       metadata : Metadata? = nil
-      feed_date : Time? = nil
+      # The calendar day as given (not shifted to UTC), so it names the
+      # same day `feed_url` put in the file name.
+      fallback_day = fallback.try { |d| Time.utc(d.year, d.month, d.day) }
+      feed_date = fallback_day
       cve_idx = -1
       epss_idx = -1
       percentile_idx = -1
@@ -219,7 +229,7 @@ module EPSS
           # e.g. `T12:55:00Z`), but `Score#date` is a calendar day — the
           # same value the API returns as `"date": "YYYY-MM-DD"`. Stamp rows
           # with the day so a feed row equals the API row for that day.
-          feed_date = metadata.score_date.try(&.to_utc.at_beginning_of_day)
+          feed_date = metadata.score_date.try(&.to_utc.at_beginning_of_day) || fallback_day
           next
         end
 

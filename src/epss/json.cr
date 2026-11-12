@@ -26,11 +26,18 @@ module EPSS
     def to_json(json : ::JSON::Builder) : Nil
       json.object do
         json.field "cve", @cve
-        json.field "epss", format_probability(@epss)
-        json.field "percentile", format_probability(@percentile)
-        if d = @date
-          json.field "date", d.to_s("%Y-%m-%d")
-        end
+        json_fields(json)
+      end
+    end
+
+    # :nodoc:
+    # The row fields other than `cve`: the shape of a FIRST `time-series`
+    # entry, which inherits its CVE from the parent row.
+    def json_fields(json : ::JSON::Builder) : Nil
+      json.field "epss", format_probability(@epss)
+      json.field "percentile", format_probability(@percentile)
+      if d = @date
+        json.field "date", d.to_s("%Y-%m-%d")
       end
     end
 
@@ -60,7 +67,11 @@ module EPSS
     # Serialize this response back into the FIRST EPSS envelope shape.
     # Symmetric with `Response.from_json` — capture an API payload,
     # write it to disk for fixture use, then replay it through the same
-    # parser without modification.
+    # parser and get the same scores, paging fields and `row_count`.
+    #
+    # A `scope=time-series` response is written back nested: each row's
+    # flattened daily entries go into its `time-series` array again, so
+    # `data.size` is `row_count` (which drives `more?`).
     def to_json(json : ::JSON::Builder) : Nil
       json.object do
         json.field "status", @status
@@ -72,10 +83,30 @@ module EPSS
         json.field "limit", @limit
         json.field "data" do
           json.array do
-            @scores.each(&.to_json(json))
+            data_rows.each do |row|
+              json.object do
+                json.field "cve", row[0].cve
+                row[0].json_fields(json)
+                if row.size > 1
+                  json.field "time-series" do
+                    json.array { row[1..].each { |s| json.object { s.json_fields(json) } } }
+                  end
+                end
+              end
+            end
           end
         end
       end
+    end
+
+    # The flattened `scores` regrouped into the API's `data` rows. Flattening
+    # puts a row's time-series entries right after it under the same CVE,
+    # and FIRST lists each CVE once per page, so runs of one CVE are rows.
+    # When that does not add up to `row_count` (a hand-built response),
+    # every score is its own row.
+    private def data_rows : Array(Array(Score))
+      rows = @scores.chunk_while { |a, b| a.cve == b.cve }.to_a
+      rows.size == @row_count ? rows : @scores.map { |s| [s] }
     end
   end
 

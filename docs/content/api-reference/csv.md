@@ -11,7 +11,7 @@ and the score rows.
 
 ## Module methods
 
-### `EPSS::CSV.parse(input : String | IO | Path) : EPSS::CSV::Feed`
+### `EPSS::CSV.parse(input : String | IO | Path, *, date : Time? = nil) : EPSS::CSV::Feed`
 
 Parse an entire feed file. Gzip-compressed input is auto-detected by
 the magic bytes (`1f 8b`).
@@ -27,7 +27,7 @@ feed.metadata.score_date     # => Time
 feed.scores.size             # => 240000+
 ```
 
-### `EPSS::CSV.each_score(input, & : Score ->) : Nil`
+### `EPSS::CSV.each_score(input, *, date : Time? = nil, & : Score ->) : Nil`
 
 Yield each `Score` without buffering the whole feed. Use this when
 processing the full ~240k-row daily dump.
@@ -70,9 +70,12 @@ delegated to `scores`.
 - A numeric value can't be coerced to `Float64`.
 - A row's `date` field is present but doesn't match `%Y-%m-%d`.
 
-If the file lacks a `#` metadata header, `Feed#metadata` is empty and
-per-row `Score#date` is `nil` (unless the file carries its own `date`
-column, which the public feed does not).
+If the file lacks a `#` metadata header (feeds before 2022-02-04 have
+none), `Feed#metadata` is empty and per-row `Score#date` is the optional
+`date:` argument's calendar day, or `nil` when none is given. A file's own
+`score_date` or `date` column always wins over `date:`.
+`Client#fetch_feed(date)` passes the requested day, so old feeds come back
+dated.
 
 ## Date handling
 

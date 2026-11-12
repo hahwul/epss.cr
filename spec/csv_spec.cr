@@ -200,6 +200,34 @@ describe EPSS::CSV do
     end
   end
 
+  describe "date: fallback" do
+    body = "cve,epss,percentile\nCVE-1,0.1,0.5\n"
+
+    it "is nil without a fallback when the feed has no metadata date" do
+      EPSS::CSV.parse(body).scores.first.date.should be_nil
+    end
+
+    it "stamps the fallback day when the feed has no metadata date" do
+      feed = EPSS::CSV.parse(body, date: Time.local(2022, 2, 3, 23, 30, location: Time::Location.fixed(9 * 3600)))
+      feed.scores.first.date.should eq(Time.utc(2022, 2, 3))
+      feed.metadata.score_date.should be_nil
+      dates = [] of Time?
+      EPSS::CSV.each_score(body, date: Time.utc(2022, 2, 3)) { |s| dates << s.date }
+      dates.should eq([Time.utc(2022, 2, 3)])
+    end
+
+    it "lets the metadata score_date and a date column win over the fallback" do
+      with_meta = "#model_version:v2022.01.01,score_date:2022-02-04T00:00:00+0000\n" + body
+      EPSS::CSV.parse(with_meta, date: Time.utc(2000, 1, 1)).scores.first.date.should eq(Time.utc(2022, 2, 4))
+      with_col = "cve,epss,percentile,date\nCVE-1,0.1,0.5,2022-01-05\n"
+      EPSS::CSV.parse(with_col, date: Time.utc(2000, 1, 1)).scores.first.date.should eq(Time.utc(2022, 1, 5))
+    end
+
+    it "falls back when the metadata line has no score_date" do
+      EPSS::CSV.parse("#model_version:v1\n" + body, date: Time.utc(2022, 2, 3)).scores.first.date.should eq(Time.utc(2022, 2, 3))
+    end
+  end
+
   describe ".feed_url" do
     it "builds the canonical empirical-security host URL by date" do
       uri = EPSS::CSV.feed_url(Time.utc(2026, 5, 18))

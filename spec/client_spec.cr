@@ -42,16 +42,44 @@ describe EPSS::Client do
       end
     end
 
-    # Live FIRST answers a `date` with no published scores with HTTP 422 and
-    # `"message":["listNoResults"]`; the reason belonged in the error.
     it "surfaces the error envelope's message on a non-2xx response" do
-      body = %({"status":"Unprocessable Entity","status-code":422,"version":"1.0","access":"public","message":["listNoResults"],"data":{"error":["listNoResults"]}})
+      body = %({"status":"Unprocessable Entity","status-code":422,"version":"1.0","access":"public","message":["somethingElse"]})
       client = EPSS::Client.new(transport: StubTransport.from_body(body, status: 422), max_retries: 0)
-      ex = expect_raises(EPSS::APIError, "EPSS API request failed: HTTP 422: listNoResults") do
-        client.score("CVE-2022-27225", date: Time.utc(2020, 1, 1))
+      ex = expect_raises(EPSS::APIError, "EPSS API request failed: HTTP 422: somethingElse") do
+        client.fetch
       end
       ex.status.should eq(422)
       ex.body.should eq(body)
+    end
+
+    # Live FIRST answers a `date` with no published scores (before EPSS began,
+    # or today before publication) with HTTP 422 `listNoResults`.
+    it "returns an empty response for a 422 listNoResults" do
+      body = %({"status":"Unprocessable Entity","status-code":422,"version":"1.0","access":"public","message":["listNoResults"],"data":{"error":["listNoResults"]}})
+      client = EPSS::Client.new(transport: StubTransport.from_body(body, status: 422), max_retries: 0)
+      resp = client.fetch(EPSS::Query.new(date: Time.utc(2020, 1, 1), offset: 20, limit: 5))
+      resp.ok?.should be_true
+      resp.total.should eq(0)
+      resp.offset.should eq(20)
+      resp.limit.should eq(5)
+      resp.scores.should be_empty
+      resp.more?.should be_false
+      client.all_scores(EPSS::Query.new(date: Time.utc(2020, 1, 1))).should be_empty
+      client.scores(["CVE-1", "CVE-2"], date: Time.utc(2020, 1, 1)).should be_empty
+    end
+
+    it "returns an empty response for the envelope=false listNoResults body" do
+      client = EPSS::Client.new(transport: StubTransport.from_body(%({"error":["listNoResults"]}), status: 422), max_retries: 0)
+      client.fetch(EPSS::Query.new(date: Time.utc(2020, 1, 1), envelope: false)).total.should eq(0)
+    end
+
+    it "still raises on a 422 that is not exactly listNoResults" do
+      body = %({"status":"Unprocessable Entity","status-code":422,"message":["listNoResults","other"]})
+      client = EPSS::Client.new(transport: StubTransport.from_body(body, status: 422), max_retries: 0)
+      expect_raises(EPSS::APIError) { client.fetch }
+      # listNoResults on another status is not the no-data case either.
+      client = EPSS::Client.new(transport: StubTransport.from_body(%({"message":["listNoResults"]}), status: 400), max_retries: 0)
+      expect_raises(EPSS::APIError) { client.fetch }
     end
 
     it "raises ParseError (not JSON::ParseException) on a non-JSON 200 body" do
@@ -236,6 +264,12 @@ describe EPSS::Client do
   end
 
   describe "#score" do
+    it "returns nil for a date FIRST has no scores for (422 listNoResults)" do
+      body = %({"status":"Unprocessable Entity","status-code":422,"version":"1.0","access":"public","message":["listNoResults"],"data":{"error":["listNoResults"]}})
+      client = EPSS::Client.new(transport: StubTransport.from_body(body, status: 422), max_retries: 0)
+      client.score("CVE-2022-27225", date: Time.utc(2020, 1, 1)).should be_nil
+    end
+
     it "returns the single score or nil" do
       payload = fixture_envelope([
         {cve: "CVE-1", epss: "0.5", percentile: "0.9", date: "2026-05-18"},
@@ -394,6 +428,14 @@ describe EPSS::Client do
   end
 
   describe "#fetch_feed" do
+    # Feeds before 2022-02-04 start straight at the header row.
+    it "stamps the requested date on a feed without a metadata line" do
+      client = EPSS::Client.new(transport: StubTransport.from_body("cve,epss,percentile\nCVE-2021-4034,0.04225,0.74118\n"))
+      feed = client.fetch_feed(Time.utc(2022, 2, 3))
+      feed.metadata.score_date.should be_nil
+      feed.scores.first.date.should eq(Time.utc(2022, 2, 3))
+    end
+
     it "downloads, gzip-decodes, and parses the daily feed via Transport" do
       csv_body = <<-CSV
         #model_version:v2025.03.14,score_date:2026-05-18T00:00:00+0000

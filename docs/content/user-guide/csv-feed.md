@@ -66,9 +66,14 @@ Every row in `Feed#scores` is stamped with the calendar day (UTC
 midnight) of the `score_date` in the file's metadata header — the same
 value the API returns as `date` — while `Feed#metadata.score_date` keeps
 the full publish timestamp (rows in the feed itself don't carry per-row
-dates). If you parse a feed that omits the `#` header — for example, a
-hand-trimmed local copy — `Score#date` is `nil` and you'll need to set
-it yourself.
+dates). Feeds before 2022-02-04 have no `#` header; `fetch_feed(date)`
+stamps their rows with the day you asked for. When parsing such a file
+yourself, pass the day with `date:` — otherwise `Score#date` is `nil`:
+
+```crystal
+feed = EPSS::CSV.parse(File.read("epss_scores-2022-02-03.csv.gz"), date: Time.utc(2022, 2, 3))
+feed.first.date # => 2022-02-03 00:00:00 UTC
+```
 
 ## Errors
 

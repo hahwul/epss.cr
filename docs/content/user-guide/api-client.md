@@ -50,6 +50,11 @@ yesterday = Time.utc - 1.day
 EPSS.scores(["CVE-2022-27225"], date: yesterday)
 ```
 
+For a day FIRST has no scores for — before April 14, 2021, or today before
+the daily publication — the API answers HTTP 422 `listNoResults`. The
+client turns that into an empty result: `score` returns `nil` and list
+lookups return no rows.
+
 ## Retries
 
 By default `Client` retries up to 3 times on `429`, `500`, `502`, `503`,

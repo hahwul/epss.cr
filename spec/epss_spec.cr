@@ -88,6 +88,42 @@ describe EPSS do
     end
   end
 
+  describe "EPSS::Response#to_json (time-series)" do
+    # Shape of a live `scope=time-series` page: one row per CVE, its daily
+    # history nested without a `cve` key.
+    payload = %({"status":"OK","status-code":200,"version":"1.0","access":"public","total":5,"offset":2,"limit":2,"data":[) +
+              %({"cve":"CVE-1","epss":"0.100000000","percentile":"0.500000000","date":"2026-05-18","time-series":[) +
+              %({"epss":"0.090000000","percentile":"0.490000000","date":"2026-05-17"},{"epss":"0.080000000","percentile":"0.480000000","date":"2026-05-16"}]},) +
+              %({"cve":"CVE-2","epss":"0.200000000","percentile":"0.600000000","date":"2026-05-18","time-series":[]}]})
+
+    it "round-trips scores, row_count, and paging fields" do
+      resp = EPSS::Response.from_json(payload)
+      resp.row_count.should eq(2)
+      resp.more?.should be_true
+      reparsed = EPSS::Response.from_json(resp.to_json)
+      reparsed.scores.should eq(resp.scores)
+      reparsed.row_count.should eq(2)
+      {reparsed.total, reparsed.offset, reparsed.limit}.should eq({5, 2, 2})
+      reparsed.more?.should be_true
+      reparsed.to_json.should eq(resp.to_json)
+    end
+
+    it "nests time-series entries like the API does" do
+      data = JSON.parse(EPSS::Response.from_json(payload).to_json)["data"]
+      data.as_a.size.should eq(2)
+      data[0]["time-series"].as_a.map(&.["date"].as_s).should eq(["2026-05-17", "2026-05-16"])
+      data[0]["time-series"][0].as_h.has_key?("cve").should be_false
+      data[1].as_h.has_key?("time-series").should be_false
+    end
+
+    it "writes each score as its own row when CVE runs do not match row_count" do
+      score = EPSS::Score.new(cve: "CVE-1", epss: 0.1, percentile: 0.5)
+      resp = EPSS::Response.new(status: "OK", status_code: 200, version: "1.0", access: "public",
+        total: 2, offset: 0, limit: 2, row_count: 2, scores: [score, score])
+      EPSS::Response.from_json(resp.to_json).row_count.should eq(2)
+    end
+  end
+
   describe "EPSS::Score.from_json" do
     it "parses one bare row into a single Score" do
       json = %({"cve": "CVE-1", "epss": "0.1", "percentile": "0.5", "date": "2026-05-18"})
