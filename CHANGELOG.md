@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- `Client#fetch` (and so `#score`, `#scores`, `#each_score`,
+  `#all_scores`) no longer raises `APIError` for FIRST's HTTP 422
+  `listNoResults`, the answer for a `date` with no published scores. It
+  returns an empty `Response` with `total == 0`, and `#score` returns
+  `nil` as documented. Other 422s still raise.
+
+### Changed
+
+- `CSV.parse` / `CSV.each_score` take an optional `date:` fallback that
+  is stamped onto rows when the feed has no `score_date` (feeds before
+  2022-02-04 have no `#` metadata line). `Client#fetch_feed(date)` passes
+  the requested day, so 2021-09-01..2022-02-03 feeds no longer yield
+  `date = nil`. (Earlier feeds have no `percentile` column and still
+  raise `ParseError`.)
+- `Response#to_json` writes time-series pages nested the way the API
+  does, so `Response.from_json(resp.to_json)` keeps `row_count` and
+  `more?`, not just the scores.
+
 ## v0.2.0
 
 - Expose the FIRST API global parameters `fields`, `pretty`, and

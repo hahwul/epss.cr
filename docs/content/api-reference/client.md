@@ -35,10 +35,17 @@ EPSS::Client.new(
 
 Issue one request. Does not iterate pages — see `#each_score`.
 
+FIRST answers a `date` it has no scores for (before 2021-04-14, or a day
+not yet published) with HTTP 422 `"message":["listNoResults"]`. That
+exact case comes back as an empty `Response` (`total == 0`, no scores)
+rather than an `EPSS::APIError`, so `#scores`, `#each_score`, and
+`#all_scores` return nothing for such a day. Any other 422 still raises.
+
 ### `#score(cve : String, *, date : Time? = nil) : EPSS::Score?`
 
 Convenience for the single-CVE case. Returns `nil` when FIRST has no
-published score.
+published score, including for a `date` FIRST has no scores for at all
+(the 422 `listNoResults` case above).
 
 ### `#scores(cves : Enumerable(String), *, date : Time? = nil, batch_size : Int32 = 100) : Array(Score)`
 

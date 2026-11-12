@@ -127,7 +127,8 @@ module EPSS
     # :nodoc:
     # The `message` of a FIRST error envelope in `body`, or `nil` when `body`
     # is not one. FIRST sends `message` as an array of strings (e.g.
-    # `["listNoResults"]` with HTTP 422), so both shapes are accepted.
+    # `["listNoResults"]` with HTTP 422), so both shapes are accepted. With
+    # `envelope=false` the same error arrives as `{"error":["listNoResults"]}`.
     def self.error_message(body : String) : String?
       ::JSON.parse(body).as_h?.try { |obj| message_of(obj) }
     rescue ::JSON::ParseException
@@ -135,7 +136,7 @@ module EPSS
     end
 
     private def self.message_of(obj : Hash(String, ::JSON::Any)) : String?
-      node = obj["message"]?
+      node = obj["message"]? || obj["error"]?
       return unless node
       if list = node.as_a?
         list.compact_map(&.as_s?).join(", ").presence
