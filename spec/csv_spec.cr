@@ -73,6 +73,11 @@ describe EPSS::CSV do
       feed.metadata.score_date.should eq(Time.utc(2026, 5, 18, 12, 0, 22))
     end
 
+    it "ignores a # line after the last row" do
+      feed = EPSS::CSV.parse("#model_version:v2025.03.14\ncve,epss,percentile\nCVE-1,0.1,0.5\n# trailer\n")
+      feed.metadata.model_version.should eq("v2025.03.14")
+    end
+
     it "rejects CSVs missing required columns" do
       expect_raises(EPSS::ParseError, /required columns/) do
         EPSS::CSV.parse("cve,score\nCVE-1,0.1\n")

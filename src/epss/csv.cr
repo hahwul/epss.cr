@@ -195,9 +195,12 @@ module EPSS
 
     private BOM = "\xEF\xBB\xBF"
 
-    # Returns the feed's metadata, which a feed with no rows also has.
+    # Returns the metadata in force at the last row (a `#` line after the
+    # rows is ignored), or the last `#` line when the feed has no rows.
     private def each_score_from(io : IO, fallback : Time?, & : Score ->) : Metadata?
       metadata : Metadata? = nil
+      row_metadata : Metadata? = nil
+      any_row = false
       # The calendar day as given (not shifted to UTC), so it names the
       # same day `feed_url` put in the file name.
       fallback_day = fallback.try { |d| Time.utc(d.year, d.month, d.day) }
@@ -261,9 +264,11 @@ module EPSS
           percentile: cells[percentile_idx],
           date: date_val.presence || feed_date,
         )
+        any_row = true
+        row_metadata = metadata
         yield score
       end
-      metadata
+      any_row ? row_metadata : metadata
     end
 
     private def validate_headers(headers : Array(String)) : Nil
