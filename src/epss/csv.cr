@@ -97,23 +97,9 @@ module EPSS
     # A `score_date` in the file, or a `date` column, always wins.
     # `Feed#metadata` still reports only what the file says.
     def parse(input : String | IO | Path, *, date : Time? = nil) : Feed
-      source = open_io(input)
-      gzipped = gzip?(source)
-      begin
-        translate_gzip_errors(gzipped) do
-          # Constructed inside the translation block: the reader validates
-          # the gzip header eagerly, so a corrupt one raises right here.
-          io = gzipped ? Compress::Gzip::Reader.new(source) : source
-          scores = [] of Score
-          metadata = each_score_from(io, date) { |score| scores << score }
-          Feed.new(metadata || Metadata.new, scores)
-        end
-      ensure
-        # Only close handles we opened ourselves; a caller-supplied IO is
-        # theirs to manage. `open_io` returns a fresh `File`/`IO::Memory`
-        # for `Path`/`String` inputs but passes any `IO` straight through.
-        source.close unless input.is_a?(IO)
-      end
+      scores = [] of Score
+      metadata = read_feed(input, date) { |score| scores << score }
+      Feed.new(metadata || Metadata.new, scores)
     end
 
     # Yield each `Score` as it is read from a daily feed. Early feeds with
@@ -129,19 +115,17 @@ module EPSS
     #
     # `date` is the fallback row date, as for `parse`.
     def each_score(input : String | IO | Path, *, date : Time? = nil, & : Score ->) : Nil
+      read_feed(input, date) { |score| yield score }
+    end
+
+    private def read_feed(input : String | IO | Path, date : Time?, & : Score ->) : Metadata?
       source = open_io(input)
-      gzipped = gzip?(source)
-      begin
-        translate_gzip_errors(gzipped) do
-          # See `parse`: the reader must be built inside the translation
-          # block so a corrupt gzip header surfaces as `ParseError`.
-          io = gzipped ? Compress::Gzip::Reader.new(source) : source
-          each_score_from(io, date) { |score| yield score }
-        end
-      ensure
-        # See `parse`: close only what we opened, never the caller's IO.
-        source.close unless input.is_a?(IO)
-      end
+      io = feed_input(source)
+      each_score_from(io, date) { |score| yield score }
+    ensure
+      # An internally created gzip reader leaves its underlying IO open.
+      io.close if io.is_a?(FeedGzipReader) && !io.same?(source)
+      source.try(&.close) unless input.is_a?(IO)
     end
 
     private def open_io(input : String | IO | Path) : IO
@@ -177,25 +161,56 @@ module EPSS
       true
     end
 
-    # Decompression failures on a truncated or corrupt gzip stream surface as
-    # `Compress::*::Error` / `IO::EOFError`. Translate them into the library's
-    # own `ParseError` so a caller only ever has to rescue `EPSS::Error`.
-    # Plain (non-gzip) input re-raises untouched — those exceptions come from
-    # the caller's IO or block, not from our decompressor.
-    private def translate_gzip_errors(gzipped : Bool, &)
-      yield
-    rescue ex : Compress::Gzip::Error | Compress::Deflate::Error | IO::EOFError
-      raise ex unless gzipped
-      raise ParseError.new("corrupt gzip stream: #{ex.message}", cause: ex)
+    # Translate errors only while opening or reading gzip data. The row
+    # callback runs outside the reader and keeps its own exceptions.
+    private class FeedGzipReader < Compress::Gzip::Reader
+      def initialize(io : IO)
+        super(io)
+      rescue ex : Compress::Gzip::Error | Compress::Deflate::Error | IO::EOFError
+        raise ParseError.new("corrupt gzip stream: #{ex.message}", cause: ex)
+      end
+
+      def unbuffered_read(slice : Bytes) : Int32
+        super(slice)
+      rescue ex : Compress::Gzip::Error | Compress::Deflate::Error | IO::EOFError
+        raise ParseError.new("corrupt gzip stream: #{ex.message}", cause: ex)
+      end
     end
 
-    # Peek two bytes to detect the gzip magic without consuming them. IOs
-    # that don't support `peek` (e.g. plain sockets) fall back to no gzip.
-    private def gzip?(io : IO) : Bool
-      return false if io.is_a?(Compress::Gzip::Reader)
-      peeked = io.peek
-      return false if peeked.nil?
-      peeked.size >= 2 && peeked[0] == 0x1f && peeked[1] == 0x8b
+    # Replay the bytes consumed while detecting gzip on streams whose peek
+    # is unavailable or ends at a chunk boundary.
+    private class PrefixedInput < IO
+      def initialize(@source : IO, @prefix : Bytes)
+      end
+
+      def read(slice : Bytes) : Int32
+        return @source.read(slice) if @prefix.empty?
+
+        count = Math.min(@prefix.size, slice.size)
+        slice.copy_from(@prefix[0, count])
+        @prefix += count
+        count
+      end
+
+      def peek : Bytes?
+        @prefix.empty? ? @source.peek : @prefix
+      end
+
+      def write(slice : Bytes) : NoReturn
+        raise IO::Error.new("CSV input is read-only")
+      end
+    end
+
+    private def feed_input(source : IO) : IO
+      return source if source.is_a?(Compress::Gzip::Reader)
+
+      prefix = source.peek
+      if prefix.nil? || prefix.size < 2
+        buffer = Bytes.new(2)
+        prefix = buffer[0, source.read_greedy(buffer)]
+        source = PrefixedInput.new(source, prefix)
+      end
+      prefix.size >= 2 && prefix[0] == 0x1f && prefix[1] == 0x8b ? FeedGzipReader.new(source) : source
     end
 
     # The published feed separates key and value with `:`, but mirrors and
@@ -286,6 +301,7 @@ module EPSS
           yield score
         end
       end
+      raise ParseError.new("CSV missing header row") unless saw_header
       if legacy = legacy_scores
         each_ranked_score(legacy) { |score| yield score }
       end
