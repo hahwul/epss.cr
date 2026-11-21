@@ -1,5 +1,19 @@
 require "./spec_helper"
 require "compress/gzip"
+require "http/content"
+
+private class ReadOnlyCSVStream < IO
+  def initialize(@source : IO)
+  end
+
+  def read(slice : Bytes) : Int32
+    @source.read(slice[0, Math.min(slice.size, 1)])
+  end
+
+  def write(slice : Bytes) : NoReturn
+    raise IO::Error.new("read-only stream")
+  end
+end
 
 describe EPSS::CSV do
   describe ".parse" do
@@ -82,6 +96,16 @@ describe EPSS::CSV do
       expect_raises(EPSS::ParseError, /required columns/) do
         EPSS::CSV.parse("cve,score\nCVE-1,0.1\n")
       end
+    end
+
+    it "rejects feeds without a header and accepts a header with zero rows" do
+      ["", "\r\n", "#model_version:v2026.06.15\n"].each do |body|
+        expect_raises(EPSS::ParseError, /missing header row/) { EPSS::CSV.parse(body) }
+        expect_raises(EPSS::ParseError, /missing header row/) do
+          EPSS::CSV.each_score(body) { |_| fail "should not yield" }
+        end
+      end
+      EPSS::CSV.parse("cve,epss,percentile\n").scores.should be_empty
     end
 
     it "derives percentiles for two-column feeds and preserves file order and ties" do
@@ -191,6 +215,16 @@ describe EPSS::CSV do
       feed.scores.first.epss.should be_close(0.42, 1e-9)
     end
 
+    it "reads gzip and plain CSV from IO without peek support" do
+      csv = "cve,epss,percentile\nCVE-1,0.1,0.5\n"
+      buffer = IO::Memory.new
+      Compress::Gzip::Writer.open(buffer, &.print(csv))
+      buffer.rewind
+
+      EPSS::CSV.parse(ReadOnlyCSVStream.new(buffer)).map(&.cve).should eq(["CVE-1"])
+      EPSS::CSV.parse(ReadOnlyCSVStream.new(IO::Memory.new(csv))).map(&.cve).should eq(["CVE-1"])
+    end
+
     # Regression: `EPSS::CSV.parse(File.read("...csv.gz"))` — the usage the
     # README documents — hands us a String full of NUL bytes. Probing the
     # filesystem with it used to raise `ArgumentError: String contains null
@@ -279,6 +313,35 @@ describe EPSS::CSV do
   end
 
   describe ".each_score" do
+    it "detects gzip when the HTTP chunk boundary splits its magic bytes" do
+      compressed = IO::Memory.new
+      Compress::Gzip::Writer.open(compressed, &.print("cve,epss,percentile\nCVE-1,0.1,0.5\n"))
+      body = IO::Memory.new
+      body << "1\r\n"
+      body.write(compressed.to_slice[0, 1])
+      body << "\r\n" << (compressed.size - 1).to_s(16) << "\r\n"
+      body.write(compressed.to_slice[1..])
+      body << "\r\n0\r\n\r\n"
+
+      body.rewind
+      scores = [] of String
+      EPSS::CSV.each_score(HTTP::ChunkedContent.new(body)) { |score| scores << score.cve }
+      scores.should eq(["CVE-1"])
+    end
+
+    it "propagates the consumer's original error from a valid gzip stream" do
+      buffer = IO::Memory.new
+      Compress::Gzip::Writer.open(buffer, &.print("cve,epss,percentile\nCVE-1,0.1,0.5\n"))
+      buffer.rewind
+      original = IO::EOFError.new("consumer stopped")
+
+      raised = expect_raises(IO::EOFError, "consumer stopped") do
+        EPSS::CSV.each_score(buffer) { |_| raise original }
+      end
+      raised.same?(original).should be_true
+      buffer.closed?.should be_false
+    end
+
     it "ranks gzipped historical rows across the full feed before yielding" do
       buffer = IO::Memory.new
       Compress::Gzip::Writer.open(buffer, &.print("cve,epss\nCVE-1,0.4\nCVE-2,0.1\nCVE-3,0.4\n"))

@@ -131,6 +131,17 @@ describe EPSS::Client do
       resp.more?.should be_false
     end
 
+    it "uses inherited envelope and pagination parameters to decode a bare response" do
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        HTTP::Client::Response.new(200, body: "[]", headers: HTTP::Headers{"X-Total" => "42"})
+      }
+      base = URI.parse("https://example.test/epss?envelope=0&offset=12&limit=0")
+      resp = EPSS::Client.new(base_uri: base, transport: stub).fetch(EPSS::Query.above(0.5))
+
+      {resp.total, resp.offset, resp.limit}.should eq({42, 12, 0})
+      resp.more?.should be_false
+    end
+
     it "honors Retry-After header (seconds) on 429" do
       attempts = 0
       slept = false
@@ -473,6 +484,19 @@ describe EPSS::Client do
       stub.requests.should be_empty
     end
 
+    it "starts at the base offset and stops at the inherited row budget" do
+      stub = paging_stub(42)
+      base = URI.parse("https://example.test/epss?offset=12&limit=3&date=2022-02-28")
+      client = EPSS::Client.new(base_uri: base, transport: stub)
+
+      client.all_scores(page_size: 2).map(&.cve).should eq(["CVE-12", "CVE-13", "CVE-14"])
+      params = stub.requests.map { |(uri, _)| uri.query_params }
+      params.map { |p| {p["offset"], p["limit"], p["date"]} }.should eq([
+        {"12", "2", "2022-02-28"},
+        {"14", "1", "2022-02-28"},
+      ])
+    end
+
     # Regression: with `envelope=false` FIRST moves total/offset into headers,
     # so the bare array looked like a single complete page and iteration
     # stopped after `page_size` rows.
@@ -576,6 +600,21 @@ describe EPSS::Client do
       uri.host.should eq("api.first.org")
       uri.path.should eq("/data/v1/epss")
       uri.query.not_nil!.should contain("cve=CVE-1")
+    end
+
+    it "preserves base parameters and replaces only explicitly set keys" do
+      base = URI.parse("https://example.test/epss?date=2022-02-28&limit=10&tag=one&tag=two&pretty=true&fields=cve")
+      client = EPSS::Client.new(base_uri: base)
+      query = EPSS::Query.for_cve("CVE-2022-27225").with_limit(5).with_pretty(false).with_fields([] of String)
+
+      params = client.build_uri(query).query_params
+      params["date"].should eq("2022-02-28")
+      params["limit"].should eq("5")
+      params["cve"].should eq("CVE-2022-27225")
+      params.fetch_all("tag").should eq(["one", "two"])
+      params["pretty"].should eq("false")
+      params["fields"]?.should be_nil
+      client.build_uri(EPSS::Query.new).to_s.should eq(base.to_s)
     end
   end
 

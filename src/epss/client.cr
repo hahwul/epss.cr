@@ -96,8 +96,12 @@ module EPSS
     # instead of an empty page. That one case is returned as an empty
     # `Response` with `total == 0`; every other 422 still raises `APIError`.
     def fetch(query : Query = Query.new) : Response
+      uri = build_uri(query)
+      params = uri.query_params
+      limit = params["limit"]?.try(&.to_i32?)
+      offset = params["offset"]?.try(&.to_i32?)
       http = begin
-        fetch_raw(query)
+        get_page(uri, limit)
       rescue ex : APIError
         raise ex unless ex.status == 422 && ex.body.try { |b| Response.error_message(b) } == "listNoResults"
         return Response.new(
@@ -106,9 +110,9 @@ module EPSS
           version: "1.0",
           access: "public",
           total: 0,
-          offset: query.offset || 0,
+          offset: offset || 0,
           # 100 is the page size FIRST reports when `limit` is not sent.
-          limit: query.limit || 100,
+          limit: limit || 100,
           row_count: 0,
           scores: [] of Score,
         )
@@ -119,7 +123,7 @@ module EPSS
         # A 200 that is not JSON (captive portal, truncated proxy reply).
         raise ParseError.new("EPSS API returned a non-JSON body: #{ex.message}", cause: ex)
       end
-      return resp unless query.envelope == false
+      return resp unless {"false", "0"}.includes?(params["envelope"]?)
 
       # With `envelope=false` FIRST returns the bare data array and moves the
       # envelope's paging fields into `X-Total` / `X-Offset` / `X-Limit`
@@ -130,8 +134,8 @@ module EPSS
         version: http.headers["X-Version"]?.presence || resp.version,
         access: http.headers["X-Access"]?.presence || resp.access,
         total: header_int(http.headers, "X-Total") || resp.total,
-        offset: header_int(http.headers, "X-Offset") || query.offset || resp.offset,
-        limit: header_int(http.headers, "X-Limit") || query.limit || resp.limit,
+        offset: header_int(http.headers, "X-Offset") || offset || resp.offset,
+        limit: header_int(http.headers, "X-Limit") || limit || resp.limit,
         row_count: resp.row_count,
         scores: resp.scores,
       )
@@ -142,10 +146,8 @@ module EPSS
     # representation with its media type (e.g. `accept: "text/csv"`).
     # HTTP failures still raise `APIError` with the original body.
     def fetch_raw(query : Query = Query.new, *, accept : String = "application/json") : HTTP::Client::Response
-      if (limit = query.limit) && limit > Query::MAX_PAGE_LIMIT
-        raise ParseError.new("limit exceeds FIRST's per-request maximum of #{Query::MAX_PAGE_LIMIT}")
-      end
-      perform_get(build_uri(query), accept: accept)
+      uri = build_uri(query)
+      get_page(uri, uri.query_params["limit"]?.try(&.to_i32?), accept: accept)
     end
 
     # Return the (at most one) score for a single CVE on the latest day,
@@ -203,10 +205,11 @@ module EPSS
     # are requested. Use `fetch` to get the count of matching CVEs.
     def each_score(query : Query = Query.new, *, page_size : Int32 = 1000, & : Score ->) : Nil
       raise ArgumentError.new("page_size must be positive") if page_size <= 0
-      return if query.limit == 0
+      defaults = @base_uri.query_params
+      remaining = query.limit || defaults["limit"]?.try(&.to_i32?)
+      return if remaining == 0
       page_size = Math.min(page_size, Query::MAX_PAGE_LIMIT)
-      offset = query.offset || 0
-      remaining = query.limit
+      offset = query.offset || defaults["offset"]?.try(&.to_i32?) || 0
       loop do
         size = remaining ? Math.min(page_size, remaining) : page_size
         # Force the envelope: with `envelope=false` FIRST moves `total` /
@@ -260,12 +263,31 @@ module EPSS
       CSV.parse(IO::Memory.new(perform_get(CSV.feed_url(host: host)).body))
     end
 
-    # Compose the absolute URI for a query against this client's base.
+    # Compose the absolute URI, overriding base parameters explicitly set by
+    # the query and preserving the other defaults.
     def build_uri(query : Query) : URI
       uri = @base_uri.dup
       qs = query.to_query_string
-      uri.query = qs unless qs.empty?
+      if uri.query.presence
+        params = uri.query_params
+        pretty_override = query.pretty == false && params.has_key?("pretty")
+        clear_fields = params.has_key?("fields") && query.fields.try(&.empty?)
+        return uri if qs.empty? && !pretty_override && !clear_fields
+
+        params["pretty"] = "false" if pretty_override
+        params.delete_all("fields") if clear_fields
+        uri.query_params = params.merge!(URI::Params.parse(qs))
+      elsif !qs.empty?
+        uri.query = qs
+      end
       uri
+    end
+
+    private def get_page(uri : URI, limit : Int32?, *, accept : String = "application/json") : HTTP::Client::Response
+      if limit && limit > Query::MAX_PAGE_LIMIT
+        raise ParseError.new("limit exceeds FIRST's per-request maximum of #{Query::MAX_PAGE_LIMIT}")
+      end
+      perform_get(uri, accept: accept)
     end
 
     # FIRST answers some requests (e.g. a `date` with no published scores,

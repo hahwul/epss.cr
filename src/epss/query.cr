@@ -17,7 +17,9 @@ module EPSS
     # itself is case-insensitive on CVE ids but matches nothing for an id
     # with leading whitespace. The list is joined with `,` at request time.
     # FIRST caps the joined value at `MAX_CVE_PARAM` characters.
-    getter cves : Array(String)
+    def cves : Array(String)
+      @cves.dup
+    end
 
     # FIRST's documented ceiling for the `cve` parameter, commas included.
     # A longer value is not rejected by the server — it silently matches
@@ -62,7 +64,9 @@ module EPSS
 
     # Comma-separated list of fields to return. Use `Client#fetch_raw`
     # when the projection omits a field required by `Score`.
-    getter fields : Array(String)?
+    def fields : Array(String)?
+      @fields.try(&.dup)
+    end
 
     # Request pretty-printed JSON. Off by default (extra whitespace is
     # wasted bandwidth for programmatic consumers); set when capturing
@@ -98,6 +102,7 @@ module EPSS
       @callback : String? = nil,
     )
       @cves = @cves.map(&.strip.upcase)
+      @fields = @fields.try(&.dup)
       validate!
     end
 
@@ -322,19 +327,17 @@ module EPSS
       end
     end
 
-    # Render a probability as a fixed-point decimal in `[0.0, 1.0]`. Plain
-    # `Float#to_s` flips to scientific notation (e.g. `1.0e-7`) for very
-    # small values, which the FIRST API rejects as a malformed parameter.
-    # Trailing zeros are stripped so `0.5` round-trips as `"0.5"` rather
-    # than `"0.500000000"`.
+    # Preserve the float's decimal precision. Expand scientific notation for
+    # small values because FIRST expects a fixed-point decimal.
     private def format_float(value : Float64) : String
       return "0" if value.zero?
-      s = "%.9f" % value
-      if s.includes?('.')
-        s = s.rstrip('0')
-        s = s.rchop('.') if s.ends_with?('.')
-      end
-      s
+      mantissa, marker, exponent = value.to_s.partition('e')
+      return mantissa.rchop(".0") if marker.empty?
+
+      # In the probability range, only small positive values use an exponent.
+      zeros = -exponent.to_i - 1
+      digits = mantissa.delete('.').rstrip('0')
+      "0.#{"0" * zeros}#{digits}"
     end
 
     # Returns a new `Query` with the given fields overridden, falling back to

@@ -49,6 +49,27 @@ describe EPSS::Query do
       params["epss-gt"].should eq("0.0000001")
     end
 
+    it "preserves threshold precision on either side of an inclusive boundary" do
+      params = EPSS::Query.new(
+        epss_gt: 0.5000000004,
+        epss_lt: 0.4999999996,
+        percentile_gt: 1e-11,
+        percentile_lt: 1.23456789e-10,
+      ).to_params.to_h
+
+      params["epss-gt"].should eq("0.5000000004")
+      params["epss-lt"].should eq("0.4999999996")
+      params["percentile-gt"].should eq("0.00000000001")
+      params["percentile-lt"].should eq("0.000000000123456789")
+    end
+
+    it "round-trips the smallest normal threshold as a fixed-point decimal" do
+      value = Float64::MIN_POSITIVE
+      decimal = EPSS::Query.new(epss_gt: value).to_params.to_h["epss-gt"]
+      decimal.should_not contain("e")
+      decimal.to_f64.should eq(value)
+    end
+
     it "encodes fields/pretty/envelope global params" do
       q = EPSS::Query.new(fields: ["cve", "epss"], pretty: true, envelope: false)
       params = q.to_params.to_h
@@ -164,6 +185,22 @@ describe EPSS::Query do
   end
 
   describe "with_* derivation" do
+    it "protects filters and projections from external array mutations" do
+      cves = ["CVE-2022-27225"]
+      fields = ["cve"]
+      query = EPSS::Query.new(cves: cves, fields: fields)
+      derived = query.with_limit(3)
+
+      cves.clear
+      fields << "epss"
+      query.cves.clear
+      query.fields.not_nil! << "date"
+      derived.fields.not_nil!.clear
+
+      query.to_params.should eq([{"cve", "CVE-2022-27225"}, {"fields", "cve"}])
+      derived.to_params.should eq([{"cve", "CVE-2022-27225"}, {"limit", "3"}, {"fields", "cve"}])
+    end
+
     it "returns a new instance" do
       q = EPSS::Query.new(cves: ["CVE-1"])
       q2 = q.with_limit(50)
