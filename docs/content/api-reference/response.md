@@ -31,10 +31,10 @@ for double-checking when callers wrap their own response handling.
 
 ### `#more? : Bool`
 
-`offset + row_count < total`. Drives `Client#each_score` pagination.
-Compares against `row_count` (not `scores.size`) so it stays correct
-when `scope=time-series` inflates each row into ~30 daily entries.
-Returns `false` for a count-only response (`limit == 0`).
+For a non-empty page, `offset + row_count < total` indicates that more
+rows are available. `row_count` counts top-level rows, including when
+`scope=time-series` expands each row into daily scores. Empty and
+count-only responses return `false`.
 
 ## Enumerable
 
@@ -68,6 +68,6 @@ returned `scores` list — each with the parent's `cve` copied over.
 Write the response back in the FIRST envelope shape.
 `Response.from_json(resp.to_json)` gives the same `scores`, `total`,
 `offset`, `limit`, and `row_count`, so `more?` survives the round trip.
-A time-series response is written nested again (each row's daily entries
-in its `time-series` array, without a `cve` key), so `data.size` equals
-`row_count`.
+Serialization of a parsed time-series response preserves the original
+row boundaries and explicit empty `time-series` arrays. Daily entries
+are nested under their original row and inherit its `cve`.

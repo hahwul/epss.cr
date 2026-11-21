@@ -83,11 +83,11 @@ module EPSS
         json.field "limit", @limit
         json.field "data" do
           json.array do
-            data_rows.each do |row|
+            data_rows.each do |(row, time_series)|
               json.object do
                 json.field "cve", row[0].cve
                 row[0].json_fields(json)
-                if row.size > 1
+                if time_series
                   json.field "time-series" do
                     json.array { row[1..].each { |s| json.object { s.json_fields(json) } } }
                   end
@@ -99,14 +99,23 @@ module EPSS
       end
     end
 
-    # The flattened `scores` regrouped into the API's `data` rows. Flattening
-    # puts a row's time-series entries right after it under the same CVE,
-    # and FIRST lists each CVE once per page, so runs of one CVE are rows.
-    # When that does not add up to `row_count` (a hand-built response),
-    # every score is its own row.
-    private def data_rows : Array(Array(Score))
+    private def data_rows : Array({Array(Score), Bool})
+      if (layout = @row_layout) && layout.sum(&.[:size]) == @scores.size
+        offset = 0
+        rows = layout.map do |entry|
+          row = @scores[offset, entry[:size]]
+          offset += row.size
+          {row, entry[:time_series]}
+        end
+        # Callers can edit the flattened scores. Avoid applying a layout
+        # that would group scores from different CVEs in one row.
+        return rows if rows.all? { |(row, _)| row.all? { |score| score.cve == row[0].cve } }
+      end
+
+      # A hand-built response has no layout, so keep the CVE-run fallback.
       rows = @scores.chunk_while { |a, b| a.cve == b.cve }.to_a
-      rows.size == @row_count ? rows : @scores.map { |s| [s] }
+      return rows.map { |row| {row, row.size > 1} } if rows.size == @row_count
+      @scores.map { |score| {[score], false} }
     end
   end
 
@@ -125,10 +134,10 @@ module EPSS
 
     obj = json.as_h? || raise ParseError.new("expected JSON object")
 
-    if obj.has_key?("data")
+    if obj.has_key?("data") || (obj.has_key?("status") && obj.has_key?("status-code"))
       Response.from_json(json, body: body).scores
     elsif obj.has_key?("cve")
-      [score_from_object(obj)]
+      Response.from_json(::JSON::Any.new([json])).scores
     else
       raise ParseError.new("JSON has neither a 'data' envelope nor a 'cve' key")
     end
@@ -139,15 +148,5 @@ module EPSS
     from_json(input)
   rescue Error | ::JSON::ParseException
     nil
-  end
-
-  private def self.score_from_object(obj : Hash(String, ::JSON::Any)) : Score
-    cve = obj["cve"]?.try(&.as_s?) || raise ParseError.new("missing cve")
-    Score.from_row(
-      cve: cve,
-      epss: obj["epss"]?.try(&.raw) || raise(ParseError.new("missing epss")),
-      percentile: obj["percentile"]?.try(&.raw) || raise(ParseError.new("missing percentile")),
-      date: obj["date"]?.try(&.raw),
-    )
   end
 end
