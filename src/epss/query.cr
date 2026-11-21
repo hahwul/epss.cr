@@ -317,7 +317,7 @@ module EPSS
       if (v = @days) && v <= 0
         raise ParseError.new("days must be positive")
       end
-      if (v = @callback) && (v.empty? || !v.each_byte.all? { |byte| byte.chr.ascii_alphanumeric? })
+      if (v = @callback) && (v.empty? || !v.each_byte.all?(&.chr.ascii_alphanumeric?))
         raise ParseError.new("callback must contain only ASCII letters and digits")
       end
     end

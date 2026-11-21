@@ -90,7 +90,7 @@ describe EPSS::CSV do
 
       feed.map(&.cve).should eq(["CVE-1", "CVE-2", "CVE-3", "CVE-4", "CVE-5"])
       feed.map(&.percentile).should eq([0.8, 0.4, 1.0, 0.8, 0.4])
-      feed.map(&.date).uniq.should eq([Time.utc(2021, 4, 14)])
+      feed.map(&.date).uniq!.should eq([Time.utc(2021, 4, 14)])
       feed.metadata.score_date.should be_nil
       EPSS::CSV.parse("cve,epss\n").scores.should be_empty
     end
