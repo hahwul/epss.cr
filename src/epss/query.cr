@@ -24,6 +24,9 @@ module EPSS
     # nothing — so `Query` refuses to build one.
     MAX_CVE_PARAM = 2000
 
+    # FIRST's maximum row count for one request.
+    MAX_PAGE_LIMIT = 10_000
+
     # Specific publication date to query historical scores for.
     getter date : Time?
 
@@ -52,15 +55,13 @@ module EPSS
     # parameter and a `!` prefix, so a leading `!` is translated to `-`.
     getter order : String?
 
-    # Pagination.
+    # Pagination. Zero requests only the count of matching CVEs. A limit
+    # above `MAX_PAGE_LIMIT` is a total budget for paginated iteration.
     getter offset : Int32?
     getter limit : Int32?
 
-    # Comma-separated list of fields to return. Maps to FIRST's global
-    # `fields` query param — request a projected payload (e.g.
-    # `"cve,epss,percentile"`) to skip `date`. `Response` needs `cve`,
-    # `epss` and `percentile` in every row and raises `ParseError` when a
-    # projection leaves one out.
+    # Comma-separated list of fields to return. Use `Client#fetch_raw`
+    # when the projection omits a field required by `Score`.
     getter fields : Array(String)?
 
     # Request pretty-printed JSON. Off by default (extra whitespace is
@@ -73,6 +74,10 @@ module EPSS
     # receive a bare data array — set this explicitly when you want to
     # override the server's default behavior.
     getter envelope : Bool?
+
+    # Callback function name for FIRST's JSONP representation. Use with
+    # `Client#fetch_raw`.
+    getter callback : String?
 
     def initialize(
       @cves : Array(String) = [] of String,
@@ -90,6 +95,7 @@ module EPSS
       @fields : Array(String)? = nil,
       @pretty : Bool? = nil,
       @envelope : Bool? = nil,
+      @callback : String? = nil,
     )
       @cves = @cves.map(&.strip.upcase)
       validate!
@@ -216,6 +222,10 @@ module EPSS
       copy(envelope: value)
     end
 
+    def with_callback(value : String) : Query
+      copy(callback: value)
+    end
+
     # Encode this query as an array of `{key, value}` URL parameter pairs,
     # ready to be passed to `URI::Params.encode`. Returns only the fields
     # that are set — never emits a parameter with an empty value.
@@ -262,6 +272,9 @@ module EPSS
       unless (e = @envelope).nil?
         params << {"envelope", e ? "true" : "false"}
       end
+      if callback = @callback
+        params << {"callback", callback}
+      end
       params
     end
 
@@ -298,11 +311,14 @@ module EPSS
       if (v = @offset) && v < 0
         raise ParseError.new("offset must be non-negative")
       end
-      if (v = @limit) && v <= 0
-        raise ParseError.new("limit must be positive")
+      if (v = @limit) && v < 0
+        raise ParseError.new("limit must be non-negative")
       end
       if (v = @days) && v <= 0
         raise ParseError.new("days must be positive")
+      end
+      if (v = @callback) && (v.empty? || !v.each_byte.all? { |byte| byte.chr.ascii_alphanumeric? })
+        raise ParseError.new("callback must contain only ASCII letters and digits")
       end
     end
 
@@ -350,6 +366,7 @@ module EPSS
       fields : Array(String)? = nil,
       pretty : Bool? = nil,
       envelope : Bool? = nil,
+      callback : String? = nil,
     ) : Query
       Query.new(
         cves: cves || @cves,
@@ -367,6 +384,7 @@ module EPSS
         fields: fields || @fields,
         pretty: pretty.nil? ? @pretty : pretty,
         envelope: envelope.nil? ? @envelope : envelope,
+        callback: callback || @callback,
       )
     end
   end

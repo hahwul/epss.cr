@@ -53,10 +53,11 @@ module EPSS
     # Whether more pages exist beyond this response. Compares the
     # server-reported `offset + row_count` against `total`, so this stays
     # correct even when time-series flattening inflates `scores`.
+    # A count-only response (`limit: 0`) has no subsequent pages.
     def more? : Bool
       # Int64: `offset` is any Int32 a payload carries, so the Int32 sum
       # can overflow.
-      @offset.to_i64 + @row_count < @total
+      @limit != 0 && @offset.to_i64 + @row_count < @total
     end
 
     # Decode a FIRST EPSS API JSON payload. Raises `EPSS::APIError` if the

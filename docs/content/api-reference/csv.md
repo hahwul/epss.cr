@@ -5,7 +5,7 @@ weight = 6
 +++
 
 `EPSS::CSV` parses the public daily score dump published at
-`https://epss.cyentia.com/epss_scores-YYYY-MM-DD.csv.gz`. The format is
+`https://epss.empiricalsecurity.com/epss_scores-YYYY-MM-DD.csv.gz`. The current format is
 a single `#`-prefixed metadata line, a header row (`cve,epss,percentile`),
 and the score rows.
 
@@ -29,14 +29,20 @@ feed.scores.size             # => 240000+
 
 ### `EPSS::CSV.each_score(input, *, date : Time? = nil, & : Score ->) : Nil`
 
-Yield each `Score` without buffering the whole feed. Use this when
-processing the full ~240k-row daily dump.
+Yield each `Score` as it is read from the daily dump. Early feeds with
+only `cve,epss` are buffered to compute their percentiles.
 
 ```crystal
 EPSS::CSV.each_score(File.open("feed.csv.gz")) do |score|
   index[score.cve] = score
 end
 ```
+
+### `EPSS::CSV.fetch(date : Time, *, host : String = FEED_HOST) : Feed`
+
+Download and parse the feed for a specific date. Omit `date` to fetch the
+most recently published feed from the stable current-feed URL. Use
+`EPSS::CSV.feed_url` with the same arguments to get the URL alone.
 
 ## Types
 
@@ -65,8 +71,9 @@ delegated to `scores`.
 
 `EPSS::CSV.parse` raises `EPSS::ParseError` when:
 
-- The header row is missing `cve`, `epss`, or `percentile`.
-- A row has fewer columns than the declared header width.
+- The header is missing `cve` or `epss`, or a header with more than two
+  columns omits `percentile`.
+- A row is missing a required column.
 - A numeric value can't be coerced to `Float64`.
 - A row's `date` field is present but doesn't match `%Y-%m-%d`.
 
@@ -75,8 +82,8 @@ none), `Feed#metadata` is empty and per-row `Score#date` is the optional
 `date:` argument's calendar day, or `nil` when none is given. A file's own
 `score_date` or `date` column always wins over `date:`.
 `Client#fetch_feed(date)` passes the requested day, so old feeds come back
-dated. Feeds before 2021-09-01 have no `percentile` column at all
-(`cve,epss`) and still raise `ParseError` (missing required column).
+dated. For two-column feeds from 2021-04-14 through 2021-08-31, each
+percentile is the fraction of rows whose score is at or below that score.
 
 ## Date handling
 

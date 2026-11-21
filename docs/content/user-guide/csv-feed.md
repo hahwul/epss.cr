@@ -4,8 +4,10 @@ description = "Parsing the public daily EPSS score dump"
 weight = 3
 +++
 
-FIRST publishes a fresh CSV dump of every EPSS score every day at
-`https://epss.cyentia.com/epss_scores-YYYY-MM-DD.csv.gz`.
+FIRST publishes a daily CSV at
+`https://epss.empiricalsecurity.com/epss_scores-YYYY-MM-DD.csv.gz`.
+Call `EPSS::CSV.fetch` to follow the stable current-feed URL to the latest
+publication, or pass a date to download a specific day's file.
 
 The file format is a single `#`-prefixed metadata line, a header row, and
 the score rows:
@@ -69,8 +71,10 @@ the full publish timestamp (rows in the feed itself don't carry per-row
 dates). Feeds before 2022-02-04 have no `#` header; `fetch_feed(date)`
 stamps their rows with the day you asked for. When parsing such a file
 yourself, pass the day with `date:` — otherwise `Score#date` is `nil`.
-(Feeds before 2021-09-01 also lack the `percentile` column and are
-rejected with `ParseError`.)
+Feeds from 2021-04-14 through 2021-08-31 have two columns (`cve,epss`).
+Both parsers read the full two-column file before calculating percentile
+ranks. Each rank includes all published scores equal to or below that
+row's score, so values with the same published precision share a rank.
 
 ```crystal
 feed = EPSS::CSV.parse(File.read("epss_scores-2022-02-03.csv.gz"), date: Time.utc(2022, 2, 3))
@@ -81,8 +85,9 @@ feed.first.date # => 2022-02-03 00:00:00 UTC
 
 `EPSS::CSV.parse` raises `EPSS::ParseError` when:
 
-- The header row is missing `cve`, `epss`, or `percentile`.
-- A row has fewer columns than the header declared.
+- The header is missing `cve` or `epss`, or a header with more than two
+  columns omits `percentile`.
+- A row is missing a required column.
 - A numeric value can't be coerced to `Float64`.
 - A row's `date` field is non-empty but doesn't match `%Y-%m-%d`.
 

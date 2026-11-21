@@ -43,8 +43,7 @@ Please open an issue with:
 epss.cr aims to match the official FIRST EPSS API and daily-feed format:
 
 - [EPSS overview](https://www.first.org/epss/)
-- [API documentation](https://www.first.org/epss/api)
-- [Daily CSV feed](https://epss.cyentia.com/) (model version + score date in
-  the `#` header line, `cve,epss,percentile` columns)
+- [EPSS API documentation](https://api.first.org/epss/)
+- [Daily CSV feed and historical archive](https://www.first.org/epss/data)
 
 Bug reports referencing a specific section of these documents land fastest.

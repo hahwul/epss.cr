@@ -17,9 +17,9 @@ weight = 5
 }
 ```
 
-Probabilities are stringified to nine decimal places — the FIRST API's
-own precision — so a serialized payload is byte-identical to one fetched
-fresh.
+Probabilities use the API's nine-decimal format when it preserves the
+value. Historical CSV percentiles can carry more precision, which is
+preserved in the serialized string.
 
 ```crystal
 score = EPSS.score("CVE-2022-27225").not_nil!

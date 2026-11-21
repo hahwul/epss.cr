@@ -41,6 +41,11 @@ module EPSS
       URI.parse("https://#{host}/epss_scores-#{date.to_s("%Y-%m-%d")}.csv.gz")
     end
 
+    # The stable URL for the most recently published feed.
+    def feed_url(*, host : String = FEED_HOST) : URI
+      URI.parse("https://#{host}/epss_scores-current.csv.gz")
+    end
+
     # Download and parse the daily feed for `date`. Delegates to
     # `EPSS.client.fetch_feed`, which routes the request through the
     # client's transport, retry, and timeout pipeline. To inject a stub
@@ -53,6 +58,11 @@ module EPSS
     # ```
     def fetch(date : Time, *, host : String = FEED_HOST) : Feed
       EPSS.client.fetch_feed(date, host: host)
+    end
+
+    # Download the most recently published feed.
+    def fetch(*, host : String = FEED_HOST) : Feed
+      EPSS.client.fetch_feed(host: host)
     end
 
     # Metadata pulled from the leading `#` header of an EPSS feed file.
@@ -106,8 +116,8 @@ module EPSS
       end
     end
 
-    # Yield each `Score` without buffering the whole feed in memory. Useful
-    # for the full daily file (200k+ rows).
+    # Yield each `Score` as it is read from a daily feed. Early feeds with
+    # only `cve,epss` are buffered to compute percentiles across all rows.
     #
     # ```
     # File.open("epss_scores-2026-05-18.csv.gz") do |raw|
@@ -207,7 +217,8 @@ module EPSS
       feed_date = fallback_day
       cve_idx = -1
       epss_idx = -1
-      percentile_idx = -1
+      percentile_idx : Int32? = nil
+      legacy_scores : Array(Score)? = nil
       date_idx = -1
       saw_header = false
       first = true
@@ -238,7 +249,8 @@ module EPSS
           validate_headers(headers)
           cve_idx = headers.index!("cve")
           epss_idx = headers.index!("epss")
-          percentile_idx = headers.index!("percentile")
+          percentile_idx = headers.index("percentile")
+          legacy_scores = [] of Score unless percentile_idx
           date_idx = headers.index("date") || -1
           saw_header = true
           next
@@ -252,7 +264,7 @@ module EPSS
         cells = line.split(',')
         next if cells.empty?
 
-        max_required = {cve_idx, epss_idx, percentile_idx}.max
+        max_required = {cve_idx, epss_idx, percentile_idx || -1}.max
         if cells.size <= max_required
           raise ParseError.new("CSV row has #{cells.size} columns, expected at least #{max_required + 1}: '#{line}'")
         end
@@ -261,18 +273,41 @@ module EPSS
         score = Score.from_row(
           cve: cells[cve_idx],
           epss: cells[epss_idx],
-          percentile: cells[percentile_idx],
+          # Legacy rows are buffered with a placeholder. Only ranked scores
+          # are returned to callers.
+          percentile: percentile_idx ? cells[percentile_idx] : 0.0,
           date: date_val.presence || feed_date,
         )
         any_row = true
         row_metadata = metadata
-        yield score
+        if legacy = legacy_scores
+          legacy << score
+        else
+          yield score
+        end
+      end
+      if legacy = legacy_scores
+        each_ranked_score(legacy) { |score| yield score }
       end
       any_row ? row_metadata : metadata
     end
 
+    private def each_ranked_score(scores : Array(Score), & : Score ->) : Nil
+      counts = scores.tally_by(&.epss)
+      percentiles = {} of Float64 => Float64
+      count_at_or_below = 0
+      counts.keys.sort!.each do |epss|
+        count_at_or_below += counts[epss]
+        percentiles[epss] = count_at_or_below / scores.size
+      end
+      scores.each do |score|
+        yield Score.new(score.cve, score.epss, percentiles[score.epss], score.date)
+      end
+    end
+
     private def validate_headers(headers : Array(String)) : Nil
-      missing = {"cve", "epss", "percentile"}.reject { |h| headers.includes?(h) }
+      required = headers.size == 2 ? {"cve", "epss"} : {"cve", "epss", "percentile"}
+      missing = required.reject { |h| headers.includes?(h) }
       raise ParseError.new("CSV missing required columns: #{missing.join(", ")}") unless missing.empty?
     end
 

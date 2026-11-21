@@ -33,13 +33,21 @@ EPSS::Client.new(
 
 ### `#fetch(query : Query = Query.new) : EPSS::Response`
 
-Issue one request. Does not iterate pages — see `#each_score`.
+Fetch one JSON page of up to 10,000 CVEs. Set `limit: 0` to read the
+number of matches from `Response#total` with an empty `scores` list.
 
 FIRST answers a `date` it has no scores for (before 2021-04-14, or a day
 not yet published) with HTTP 422 `"message":["listNoResults"]`. That
 exact case comes back as an empty `Response` (`total == 0`, no scores)
 rather than an `EPSS::APIError`, so `#scores`, `#each_score`, and
 `#all_scores` return nothing for such a day. Any other 422 still raises.
+
+### `#fetch_raw(query : Query = Query.new, *, accept : String = "application/json") : HTTP::Client::Response`
+
+Return the HTTP body and headers without parsing them into scores. Use
+this for projections that omit required `Score` fields or to request a
+different representation. For example, `accept: "text/csv"` requests
+the API's CSV response. HTTP errors raise `EPSS::APIError`.
 
 ### `#score(cve : String, *, date : Time? = nil) : EPSS::Score?`
 
@@ -63,12 +71,19 @@ Iterate every score matching `query`, fetching subsequent pages
 transparently. The loop advances by the **server-reported** `row_count`
 on `EPSS::Response`, so it remains correct when `scope=time-series`
 expands each row.
+The query's `limit` is the total row budget, and each request is capped
+at 10,000 rows. A zero budget makes no HTTP requests.
 
 ### `#all_scores(query, *, page_size : Int32 = 1000) : Array(Score)`
 
 Convenience around `#each_score` that materializes every page into a
 single Array. Be aware that an unfiltered query can be hundreds of
 thousands of rows.
+
+### `#fetch_feed(date : Time, *, host : String = CSV::FEED_HOST) : CSV::Feed`
+
+Download and parse the daily score feed for the given calendar date.
+Omit `date` to follow the stable current-feed URL to the latest publication.
 
 ### `#build_uri(query : Query) : URI`
 
