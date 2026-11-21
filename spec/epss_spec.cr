@@ -35,6 +35,19 @@ describe EPSS do
       scores.first.cve.should eq("CVE-2022-27225")
     end
 
+    it "preserves the history in a standalone time-series row" do
+      json = %({"cve":"CVE-1","epss":"0.2","percentile":"0.5","date":"2026-05-18","time-series":[{"epss":"0.1","percentile":"0.4","date":"2026-05-17"}]})
+      EPSS.from_json(json).should eq(EPSS.from_json("[#{json}]"))
+      EPSS::Score.from_json?(json).should be_nil
+    end
+
+    it "reports FIRST errors that omit the data key" do
+      json = %({"status":"Unprocessable Entity","status-code":422,"message":["listNoResults"]})
+      error = expect_raises(EPSS::APIError, "listNoResults") { EPSS.from_json(json) }
+      error.status.should eq(422)
+      error.body.should eq(json)
+    end
+
     it "accepts numeric values (not just stringified)" do
       json = %({"cve": "CVE-1", "epss": 0.5, "percentile": 0.9, "date": "2026-05-18"})
       scores = EPSS.from_json(json)
@@ -124,7 +137,20 @@ describe EPSS do
       data.as_a.size.should eq(2)
       data[0]["time-series"].as_a.map(&.["date"].as_s).should eq(["2026-05-17", "2026-05-16"])
       data[0]["time-series"][0].as_h.has_key?("cve").should be_false
-      data[1].as_h.has_key?("time-series").should be_false
+      data[1]["time-series"].as_a.should be_empty
+    end
+
+    it "keeps the original row boundaries when adjacent rows share a CVE" do
+      rows = %([{"cve":"CVE-1","epss":"0.2","percentile":"0.5","date":"2026-05-18","time-series":[{"epss":"0.1","percentile":"0.4","date":"2026-05-17"}]},) +
+             %({"cve":"CVE-1","epss":"0.3","percentile":"0.6","date":"2026-05-19","time-series":[]}])
+      resp = EPSS::Response.from_json(rows)
+      encoded = JSON.parse(resp.to_json)["data"].as_a
+
+      encoded.map(&.["date"].as_s).should eq(["2026-05-18", "2026-05-19"])
+      encoded[0]["time-series"][0]["date"].as_s.should eq("2026-05-17")
+      encoded[1]["time-series"].as_a.should be_empty
+      reparsed = EPSS::Response.from_json(resp.to_json)
+      {reparsed.row_count, reparsed.scores}.should eq({2, resp.scores})
     end
 
     it "writes each score as its own row when CVE runs do not match row_count" do

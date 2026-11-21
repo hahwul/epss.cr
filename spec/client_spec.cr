@@ -142,6 +142,19 @@ describe EPSS::Client do
       resp.more?.should be_false
     end
 
+    it "preserves row layout and paging headers when a mirror returns a bare array" do
+      rows = %([{"cve":"CVE-1","epss":"0.2","percentile":"0.5","time-series":[]},{"cve":"CVE-1","epss":"0.3","percentile":"0.6","time-series":[{"epss":"0.1","percentile":"0.4"}]}])
+      headers = HTTP::Headers{"X-Total" => "42", "X-Offset" => "2", "X-Limit" => "2"}
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        HTTP::Client::Response.new(200, body: rows, headers: headers)
+      }
+
+      resp = EPSS::Client.new(transport: stub).fetch
+      {resp.total, resp.offset, resp.limit, resp.row_count}.should eq({42, 2, 2, 2})
+      data = JSON.parse(resp.to_json)["data"].as_a
+      data.map(&.["time-series"].as_a.size).should eq([0, 1])
+    end
+
     it "honors Retry-After header (seconds) on 429" do
       attempts = 0
       slept = false
@@ -422,6 +435,31 @@ describe EPSS::Client do
   end
 
   describe "#each_score (pagination)" do
+    it "uses the request offset and limit when an envelope omits them" do
+      first = %({"status":"OK","status-code":200,"total":3,"data":[{"cve":"CVE-2","epss":"0.1","percentile":"0.5"}]})
+      second = %({"status":"OK","status-code":200,"total":3,"data":[{"cve":"CVE-3","epss":"0.1","percentile":"0.5"}]})
+      stub = StubTransport.from_queue([
+        HTTP::Client::Response.new(200, body: first),
+        HTTP::Client::Response.new(200, body: second),
+      ])
+      client = EPSS::Client.new(transport: stub)
+
+      scores = client.all_scores(EPSS::Query.new(offset: 1), page_size: 2)
+      scores.map(&.cve).should eq(["CVE-2", "CVE-3"])
+      stub.requests.map { |(uri, _)| uri.query_params["offset"] }.should eq(["1", "2"])
+    end
+
+    it "rejects a non-empty page that starts at a different offset before yielding" do
+      payload = %({"status":"OK","status-code":200,"total":3,"offset":0,"limit":1,"data":[{"cve":"CVE-1","epss":"0.1","percentile":"0.5"}]})
+      stub = StubTransport.from_body(payload)
+      client = EPSS::Client.new(transport: stub)
+
+      expect_raises(EPSS::ParseError, /requested offset 1/) do
+        client.each_score(EPSS::Query.new(offset: 1), page_size: 1) { |_| fail "should not yield a mismatched page" }
+      end
+      stub.requests.size.should eq(1)
+    end
+
     it "follows the offset/total cursor until exhaustion" do
       page1 = fixture_envelope(
         (1..3).map { |i| {cve: "CVE-#{i}", epss: "0.1", percentile: "0.5", date: "2026-05-18"} }.to_a,

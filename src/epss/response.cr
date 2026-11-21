@@ -15,6 +15,10 @@ module EPSS
   struct Response
     include Enumerable(Score)
 
+    private alias RowLayout = NamedTuple(size: Int32, time_series: Bool)
+
+    @row_layout : Array(RowLayout)? = nil
+
     getter status : String
     getter status_code : Int32
     getter version : String
@@ -53,11 +57,11 @@ module EPSS
     # Whether more pages exist beyond this response. Compares the
     # server-reported `offset + row_count` against `total`, so this stays
     # correct even when time-series flattening inflates `scores`.
-    # A count-only response (`limit: 0`) has no subsequent pages.
+    # An empty or count-only page cannot advance the offset.
     def more? : Bool
       # Int64: `offset` is any Int32 a payload carries, so the Int32 sum
       # can overflow.
-      @limit != 0 && @offset.to_i64 + @row_count < @total
+      @limit != 0 && @row_count > 0 && @offset.to_i64 + @row_count < @total
     end
 
     # Decode a FIRST EPSS API JSON payload. Raises `EPSS::APIError` if the
@@ -71,25 +75,33 @@ module EPSS
     # to inspect the document's shape before dispatching and must not parse
     # the same input twice — an `IO` is consumed by the first pass.
     #
-    # `body` is only carried into `APIError#body` for error envelopes.
-    def self.from_json(json : ::JSON::Any, *, body : String? = nil) : Response
+    # `body` is carried into `APIError#body`. The client supplies paging
+    # defaults from its headers and request for metadata absent in the JSON.
+    def self.from_json(
+      json : ::JSON::Any,
+      *,
+      body : String? = nil,
+      default_offset : Int32 = 0,
+      default_limit : Int32? = nil,
+      bare_total : Int32? = nil,
+      bare_version : String? = nil,
+      bare_access : String? = nil,
+    ) : Response
       # `envelope=false` asks the API for the bare data array instead of the
-      # status wrapper. There is no status/total/offset to read in that
-      # shape, so synthesize a single-page success envelope around the rows.
+      # status wrapper. Use client-supplied metadata when available.
       if rows = json.as_a?
-        scores = [] of Score
-        rows.each { |row| scores.concat(scores_from_data_row(row)) }
+        scores, layout = decode_rows(rows)
         return new(
           status: "OK",
           status_code: 200,
-          version: "1.0",
-          access: "public",
-          total: rows.size,
-          offset: 0,
-          limit: rows.size,
+          version: bare_version || "1.0",
+          access: bare_access || "public",
+          total: nonnegative(bare_total || rows.size, "total"),
+          offset: nonnegative(default_offset, "offset"),
+          limit: nonnegative(default_limit || rows.size, "limit"),
           row_count: rows.size,
           scores: scores,
-        )
+        ).with_row_layout(layout)
       end
 
       obj = json.as_h? || raise ParseError.new("expected JSON object at top level")
@@ -105,13 +117,7 @@ module EPSS
       data_node = obj["data"]? || raise ParseError.new("missing data array in EPSS response")
       data = data_node.as_a? || raise ParseError.new("data field is not an array")
 
-      # `scope=time-series` requests nest a `time-series` array per row,
-      # each entry of which is another {epss, percentile, date} triple
-      # carrying the *same* CVE as the parent. We flatten those into the
-      # main score list so consumers see one Score per (cve, date) pair
-      # regardless of how the API chose to bundle them.
-      scores = [] of Score
-      data.each { |row| scores.concat(scores_from_data_row(row)) }
+      scores, layout = decode_rows(data)
       row_count = data.size
 
       new(
@@ -119,12 +125,22 @@ module EPSS
         status_code: status_code,
         version: string(obj, "version", default: "1.0"),
         access: string(obj, "access", default: "public"),
-        total: int(obj, "total", default: row_count),
-        offset: int(obj, "offset", default: 0),
-        limit: int(obj, "limit", default: row_count),
+        total: nonnegative(int(obj, "total", default: row_count), "total"),
+        offset: nonnegative(int(obj, "offset", default: default_offset), "offset"),
+        limit: nonnegative(int(obj, "limit", default: default_limit || row_count), "limit"),
         row_count: row_count,
         scores: scores,
-      )
+      ).with_row_layout(layout)
+    end
+
+    protected def with_row_layout(layout : Array(RowLayout)) : self
+      @row_layout = layout if layout.any?(&.[:time_series])
+      self
+    end
+
+    private def self.nonnegative(value : Int32, key : String) : Int32
+      raise ParseError.new("negative '#{key}' in EPSS response: #{value}") if value < 0
+      value
     end
 
     # :nodoc:
@@ -148,22 +164,26 @@ module EPSS
       end
     end
 
-    private def self.scores_from_data_row(node : ::JSON::Any) : Array(Score)
-      h = node.as_h? || raise ParseError.new("expected object in data array, got #{node}")
-      cve = h["cve"]?.try(&.as_s?) || raise ParseError.new("missing cve in data row")
+    private def self.decode_rows(rows : Array(::JSON::Any)) : {Array(Score), Array(RowLayout)}
+      scores = [] of Score
+      layout = [] of RowLayout
+      rows.each do |node|
+        row = node.as_h? || raise ParseError.new("expected object in data array, got #{node}")
+        cve = row["cve"]?.try(&.as_s?) || raise ParseError.new("missing cve in data row")
+        start = scores.size
+        scores << build_score(cve, row)
 
-      out = [] of Score
-      out << build_score(cve, h)
-
-      if ts = h["time-series"]?
-        ts_arr = ts.as_a? || raise ParseError.new("time-series field is not an array")
-        ts_arr.each do |entry|
-          eh = entry.as_h? || raise ParseError.new("expected object in time-series array")
-          out << build_score(cve, eh)
+        time_series = row["time-series"]?
+        if time_series
+          entries = time_series.as_a? || raise ParseError.new("time-series field is not an array")
+          entries.each do |entry|
+            day = entry.as_h? || raise ParseError.new("expected object in time-series array")
+            scores << build_score(cve, day)
+          end
         end
+        layout << {size: scores.size - start, time_series: !time_series.nil?}
       end
-
-      out
+      {scores, layout}
     end
 
     private def self.build_score(cve : String, h : Hash(String, ::JSON::Any)) : Score

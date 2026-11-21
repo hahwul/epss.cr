@@ -117,27 +117,20 @@ module EPSS
           scores: [] of Score,
         )
       end
-      begin
-        resp = Response.from_json(http.body)
+      body = http.body
+      json = begin
+        ::JSON.parse(body)
       rescue ex : ::JSON::ParseException
-        # A 200 that is not JSON (captive portal, truncated proxy reply).
         raise ParseError.new("EPSS API returned a non-JSON body: #{ex.message}", cause: ex)
       end
-      return resp unless {"false", "0"}.includes?(params["envelope"]?)
-
-      # With `envelope=false` FIRST returns the bare data array and moves the
-      # envelope's paging fields into `X-Total` / `X-Offset` / `X-Limit`
-      # response headers, so the body alone would report `total == size`.
-      Response.new(
-        status: resp.status,
-        status_code: resp.status_code,
-        version: http.headers["X-Version"]?.presence || resp.version,
-        access: http.headers["X-Access"]?.presence || resp.access,
-        total: header_int(http.headers, "X-Total") || resp.total,
-        offset: header_int(http.headers, "X-Offset") || offset || resp.offset,
-        limit: header_int(http.headers, "X-Limit") || limit || resp.limit,
-        row_count: resp.row_count,
-        scores: resp.scores,
+      Response.from_json(
+        json,
+        body: body,
+        default_offset: header_int(http.headers, "X-Offset") || offset || 0,
+        default_limit: header_int(http.headers, "X-Limit") || limit,
+        bare_total: header_int(http.headers, "X-Total"),
+        bare_version: http.headers["X-Version"]?.presence,
+        bare_access: http.headers["X-Access"]?.presence,
       )
     end
 
@@ -217,11 +210,14 @@ module EPSS
         # when a proxy has not stripped those headers.
         page_query = query.with_offset(offset).with_limit(size).with_envelope(true)
         resp = fetch(page_query)
+        break if resp.row_count == 0
+        if resp.offset != offset
+          raise ParseError.new("EPSS API returned offset #{resp.offset} for requested offset #{offset}")
+        end
         resp.scores.each { |score| yield score }
         # Advance by the *server-reported* row count, not the flattened
         # score count — `scope=time-series` inflates each row into ~30
         # daily entries, which would otherwise skip pages.
-        break if resp.row_count == 0
         if left = remaining
           left -= resp.row_count
           remaining = left

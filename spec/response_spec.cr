@@ -34,6 +34,13 @@ describe EPSS::Response do
       resp.limit.should eq(100)
     end
 
+    it "rejects negative pagination values" do
+      {"total", "offset", "limit"}.each do |key|
+        payload = %({"status":"OK","status-code":200,"#{key}":-1,"data":[]})
+        expect_raises(EPSS::ParseError, /#{key}/) { EPSS::Response.from_json(payload) }
+      end
+    end
+
     # `Query#with_envelope(false)` asks the API for the bare data array, so
     # the decoder has to accept a top-level array — it used to reject the
     # payload its own query builder can request.
@@ -82,6 +89,11 @@ describe EPSS::Response do
   end
 
   describe "#more?" do
+    it "does not advertise a next page when the current page contains no rows" do
+      payload = %({"status":"OK","status-code":200,"total":42,"offset":0,"limit":100,"data":[]})
+      EPSS::Response.from_json(payload).more?.should be_false
+    end
+
     # `offset` is any Int32 the payload carries; `offset + row_count` must
     # not overflow on a value near Int32::MAX.
     it "does not overflow on an offset near Int32::MAX" do
