@@ -97,7 +97,7 @@ module EPSS
     # `Response` with `total == 0`; every other 422 still raises `APIError`.
     def fetch(query : Query = Query.new) : Response
       http = begin
-        perform_get(build_uri(query))
+        fetch_raw(query)
       rescue ex : APIError
         raise ex unless ex.status == 422 && ex.body.try { |b| Response.error_message(b) } == "listNoResults"
         return Response.new(
@@ -127,14 +127,25 @@ module EPSS
       Response.new(
         status: resp.status,
         status_code: resp.status_code,
-        version: resp.version,
-        access: resp.access,
+        version: http.headers["X-Version"]?.presence || resp.version,
+        access: http.headers["X-Access"]?.presence || resp.access,
         total: header_int(http.headers, "X-Total") || resp.total,
         offset: header_int(http.headers, "X-Offset") || query.offset || resp.offset,
-        limit: header_int(http.headers, "X-Limit") || resp.limit,
+        limit: header_int(http.headers, "X-Limit") || query.limit || resp.limit,
         row_count: resp.row_count,
         scores: resp.scores,
       )
+    end
+
+    # Return the HTTP response without decoding it into `Score` objects.
+    # Use this for field projections or to request another FIRST API
+    # representation with its media type (e.g. `accept: "text/csv"`).
+    # HTTP failures still raise `APIError` with the original body.
+    def fetch_raw(query : Query = Query.new, *, accept : String = "application/json") : HTTP::Client::Response
+      if (limit = query.limit) && limit > Query::MAX_PAGE_LIMIT
+        raise ParseError.new("limit exceeds FIRST's per-request maximum of #{Query::MAX_PAGE_LIMIT}")
+      end
+      perform_get(build_uri(query), accept: accept)
     end
 
     # Return the (at most one) score for a single CVE on the latest day,
@@ -188,9 +199,12 @@ module EPSS
     # `page_size` is the per-request page granularity. A `limit` set on the
     # query is the *total* row budget for the whole iteration — pagination
     # stops once it is exhausted, so `all_scores(Query.top(10))` yields ten
-    # rows rather than the entire population.
+    # rows rather than the entire population. With `limit: 0`, no rows
+    # are requested. Use `fetch` to get the count of matching CVEs.
     def each_score(query : Query = Query.new, *, page_size : Int32 = 1000, & : Score ->) : Nil
       raise ArgumentError.new("page_size must be positive") if page_size <= 0
+      return if query.limit == 0
+      page_size = Math.min(page_size, Query::MAX_PAGE_LIMIT)
       offset = query.offset || 0
       remaining = query.limit
       loop do
@@ -241,6 +255,11 @@ module EPSS
       CSV.parse(IO::Memory.new(perform_get(uri).body), date: date)
     end
 
+    # Download the current feed via FIRST's stable, redirecting URL.
+    def fetch_feed(*, host : String = CSV::FEED_HOST) : CSV::Feed
+      CSV.parse(IO::Memory.new(perform_get(CSV.feed_url(host: host)).body))
+    end
+
     # Compose the absolute URI for a query against this client's base.
     def build_uri(query : Query) : URI
       uri = @base_uri.dup
@@ -260,10 +279,10 @@ module EPSS
       headers[name]?.try(&.strip.to_i32?).try { |v| v >= 0 ? v : nil }
     end
 
-    private def perform_get(uri : URI) : HTTP::Client::Response
+    private def perform_get(uri : URI, *, accept : String = "application/json") : HTTP::Client::Response
       headers = HTTP::Headers{
         "User-Agent" => @user_agent,
-        "Accept"     => "application/json",
+        "Accept"     => accept,
       }
 
       attempt = 0

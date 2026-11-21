@@ -25,6 +25,10 @@ EPSS::Query.new(
   order:          String? = nil,
   offset:         Int32? = nil,
   limit:          Int32? = nil,
+  fields:         Array(String)? = nil,
+  pretty:         Bool? = nil,
+  envelope:       Bool? = nil,
+  callback:       String? = nil,
 )
 ```
 
@@ -39,9 +43,15 @@ is translated to FIRST's `-` prefix.
 - any threshold (`epss_gt`, `epss_lt`, `percentile_gt`, `percentile_lt`)
   is outside `[0.0, 1.0]`;
 - `offset` is negative;
-- `limit` is non-positive;
+- `limit` is negative;
+- a JSONP `callback` is empty or contains characters other than ASCII
+  letters and digits;
 - a CVE id is blank, or the comma-joined `cve` list exceeds FIRST's
   2000-character cap (the API silently returns no rows for a longer one).
+
+Set `limit: 0` to retrieve the match count in `Client#fetch(query).total`.
+FIRST accepts up to `Query::MAX_PAGE_LIMIT` rows per request (10,000).
+Larger totals can be retrieved with `Client#each_score` or `#all_scores`.
 
 ## Encoding
 
@@ -71,6 +81,7 @@ page = base.with_offset(100).with_limit(50)
 | `#with_date(Time)` | new `Query` with `date` set |
 | `#with_offset(Int32)` | new `Query` with `offset` set |
 | `#with_limit(Int32)` | new `Query` with `limit` set |
+| `#with_callback(String)` | new `Query` with a JSONP callback for `Client#fetch_raw` |
 
 ## Examples
 

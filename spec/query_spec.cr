@@ -89,9 +89,20 @@ describe EPSS::Query do
       expect_raises(EPSS::ParseError) { EPSS::Query.new(percentile_lt: -0.1) }
     end
 
-    it "rejects negative offset and non-positive limit" do
+    it "accepts a zero limit for count-only queries" do
+      EPSS::Query.new.with_limit(0).to_params.should eq([{"limit", "0"}])
+    end
+
+    it "rejects negative offset and limit" do
       expect_raises(EPSS::ParseError) { EPSS::Query.new(offset: -1) }
-      expect_raises(EPSS::ParseError) { EPSS::Query.new(limit: 0) }
+      expect_raises(EPSS::ParseError) { EPSS::Query.new(limit: -1) }
+    end
+
+    it "accepts only non-empty alphanumeric JSONP callback names" do
+      EPSS::Query.new(callback: "epss1").to_params.should eq([{"callback", "epss1"}])
+      ["", "obj.epss", "epss()", "é"].each do |name|
+        expect_raises(EPSS::ParseError, /callback/) { EPSS::Query.new.with_callback(name) }
+      end
     end
 
     # Regression: FIRST treats an empty `cve=` as "no filter", so a blank id
@@ -178,6 +189,7 @@ describe EPSS::Query do
         .with_fields("cve,epss")
         .with_pretty(true)
         .with_envelope(false)
+        .with_callback("epss1")
       params = q.to_params.to_h
       params["q"].should eq("openssl")
       params["scope"].should eq("time-series")
@@ -190,6 +202,7 @@ describe EPSS::Query do
       params["fields"].should eq("cve,epss")
       params["pretty"].should eq("true")
       params["envelope"].should eq("false")
+      params["callback"].should eq("epss1")
     end
   end
 end

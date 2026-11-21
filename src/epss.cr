@@ -122,10 +122,8 @@ module EPSS
     client.fetch_feed(date)
   end
 
-  # Download today's UTC feed. The feed is published once per day; if
-  # called before the day's file has been minted the request will
-  # surface as `EPSS::APIError` with a 404 status.
+  # Download the most recently published feed via FIRST's stable URL.
   def self.today_feed : CSV::Feed
-    feed(Time.utc)
+    client.fetch_feed
   end
 end

@@ -34,6 +34,7 @@ for double-checking when callers wrap their own response handling.
 `offset + row_count < total`. Drives `Client#each_score` pagination.
 Compares against `row_count` (not `scores.size`) so it stays correct
 when `scope=time-series` inflates each row into ~30 daily entries.
+Returns `false` for a count-only response (`limit == 0`).
 
 ## Enumerable
 

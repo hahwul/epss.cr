@@ -55,11 +55,11 @@ module EPSS
       nil
     end
 
-    # EPSS publishes probabilities to nine decimal places. Use the same
-    # precision so a round-trip through JSON is byte-identical for any
-    # value originally sourced from FIRST.
+    # Keep FIRST's usual nine-decimal API format when it preserves the
+    # value. Historical CSV percentiles can carry more precision.
     private def format_probability(value : Float64) : String
-      "%.9f" % value
+      decimal = "%.9f" % value
+      decimal.to_f64 == value ? decimal : value.to_s
     end
   end
 

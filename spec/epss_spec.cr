@@ -5,6 +5,17 @@ describe EPSS do
     EPSS::VERSION.should be_a(String)
   end
 
+  it "fetches the latest feed through both module helpers" do
+    previous = EPSS.client
+    stub = StubTransport.from_body("cve,epss,percentile\nCVE-1,0.1,0.5\n")
+    EPSS.client = EPSS::Client.new(transport: stub)
+
+    EPSS.today_feed.scores.should eq(EPSS::CSV.fetch.scores)
+    stub.requests.map { |(uri, _)| uri.path }.should eq(Array.new(2, "/epss_scores-current.csv.gz"))
+  ensure
+    EPSS.client = previous if previous
+  end
+
   describe ".from_json" do
     it "decodes a FIRST API envelope" do
       payload = fixture_envelope([

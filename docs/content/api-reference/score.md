@@ -77,8 +77,10 @@ score.to_json
 # => {"cve":"CVE-2022-27225","epss":"0.001870000","percentile":"0.401290000","date":"2026-05-18"}
 ```
 
-Probabilities round-trip at nine decimal places. `EPSS.from_json` decodes
-either a bare row or a full FIRST envelope.
+Probabilities use the API's nine-decimal format when it preserves the
+value. Values with higher precision, such as historical percentiles,
+round-trip at full precision. `EPSS.from_json` decodes a bare row or a
+full FIRST envelope.
 
 See also: [`EPSS::Band`](/api-reference/band/) for the qualitative
 classification, [`EPSS::Response`](/api-reference/response/) for the API

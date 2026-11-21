@@ -6,7 +6,7 @@ A Crystal implementation of the [Exploit Prediction Scoring System
 `epss.cr` covers the two ways EPSS is consumed in practice:
 
 - **The FIRST REST API** at `https://api.first.org/data/v1/epss` — lookup
-  by CVE, date range, threshold, percentile, with transparent pagination.
+  by CVE, publication date, score or percentile, with transparent pagination.
 - **The daily CSV feed** at `https://epss.empiricalsecurity.com/epss_scores-YYYY-MM-DD.csv.gz`
   — streamed row-by-row, gzip auto-detected. The legacy `epss.cyentia.com`
   host still mirrors the same file and can be supplied via `host:`.
@@ -53,7 +53,7 @@ EPSS.top(10)                  # 10 highest-EPSS CVEs
 EPSS.above(0.95)              # every CVE above the threshold (paginated)
 EPSS.search("CVE-2024-3")     # partial CVE-ID search, EPSS-desc
 EPSS.feed(Time.utc(2026, 5, 18))  # daily CSV feed
-EPSS.today_feed               # today's CSV feed
+EPSS.today_feed               # latest published CSV feed
 ```
 
 Same builders are available on `EPSS::Query` for composition:
@@ -86,6 +86,8 @@ end
 `page_size:` controls the per-request page size; a `limit` on the query is
 the total row budget for the whole iteration, so
 `client.all_scores(EPSS::Query.top(10))` stops after ten rows.
+FIRST caps each request at 10,000 rows. To get only the match count, use
+`client.fetch(EPSS::Query.above(0.95).with_limit(0)).total`.
 
 ### Parse the daily CSV feed
 
@@ -113,7 +115,14 @@ EPSS::CSV.feed_url(Time.utc(2026, 5, 18))
 # client — slow networks surface as EPSS::APIError rather than hangs.
 feed = EPSS::CSV.fetch(Time.utc(2026, 5, 18))
 feed.metadata.score_date    # => Time(2026-05-18)
+
+EPSS::CSV.fetch              # latest published feed via the stable URL
 ```
+
+The earliest daily files (2021-04-14 through 2021-08-31) contain only
+`cve,epss`. The parser reads the full file to derive each percentile,
+including ties in the published scores. Pass `date:` when parsing a
+historical file without metadata to give its scores a date.
 
 ### Field projection
 
@@ -127,15 +136,21 @@ query = EPSS::Query.new
   .with_fields(["cve", "epss", "percentile"])
 ```
 
-Keep `cve`, `epss` and `percentile`: every `Score` needs them, so rows
-projected without one raise `EPSS::ParseError`. A projection also drops
-the `time-series` entries of a `scope=time-series` query.
+Keep `cve`, `epss` and `percentile` when using `Client#fetch`, since
+every `Score` needs them. For other projections, use `fetch_raw` to
+access the returned body and headers.
+
+```crystal
+query = EPSS::Query.top(10).with_fields("cve")
+response = client.fetch_raw(query.with_envelope(false))
+ids = JSON.parse(response.body).as_a.map { |row| row["cve"].as_s }
+```
 
 `Query` also exposes `with_pretty(true)` and `with_envelope(false)` for
 the other FIRST global parameters. With `envelope=false` the API answers
 with a bare row array and moves `total` / `offset` / `limit` into the
 `X-Total` / `X-Offset` / `X-Limit` response headers. `Client#fetch` reads
-them back; `Response.from_json` on the bare array alone reports a single
+them back. `Response.from_json` on the bare array alone reports a single
 complete page.
 
 ### JSON round-trip

@@ -84,6 +84,25 @@ describe EPSS::CSV do
       end
     end
 
+    it "derives percentiles for two-column feeds and preserves file order and ties" do
+      csv = "cve,epss\nCVE-1,0.4\nCVE-2,2.5e-4\nCVE-3,0.9\nCVE-4,0.400\nCVE-5,0.00025\n"
+      feed = EPSS::CSV.parse(csv, date: Time.utc(2021, 4, 14))
+
+      feed.map(&.cve).should eq(["CVE-1", "CVE-2", "CVE-3", "CVE-4", "CVE-5"])
+      feed.map(&.percentile).should eq([0.8, 0.4, 1.0, 0.8, 0.4])
+      feed.map(&.date).uniq!.should eq([Time.utc(2021, 4, 14)])
+      feed.metadata.score_date.should be_nil
+      EPSS::CSV.parse("cve,epss\n").scores.should be_empty
+    end
+
+    it "uses published percentiles when the column is present" do
+      csv = "cve,epss,percentile\nCVE-2021-26084,0.03197,0.8142562925898793\n"
+      score = EPSS::CSV.parse(csv).scores.first
+
+      score.percentile.should eq(0.8142562925898793)
+      EPSS::Score.from_json(score.to_json).should eq(score)
+    end
+
     it "accepts a Path pointing at a CSV file on disk" do
       csv = "cve,epss,percentile\nCVE-1,0.1,0.5\n"
       path = File.tempfile("epss-feed", ".csv") do |f|
@@ -243,6 +262,10 @@ describe EPSS::CSV do
   end
 
   describe ".feed_url" do
+    it "builds the stable current-feed URL when the date is omitted" do
+      EPSS::CSV.feed_url.to_s.should eq("https://epss.empiricalsecurity.com/epss_scores-current.csv.gz")
+    end
+
     it "builds the canonical empirical-security host URL by date" do
       uri = EPSS::CSV.feed_url(Time.utc(2026, 5, 18))
       uri.to_s.should eq("https://epss.empiricalsecurity.com/epss_scores-2026-05-18.csv.gz")
@@ -256,6 +279,18 @@ describe EPSS::CSV do
   end
 
   describe ".each_score" do
+    it "ranks gzipped historical rows across the full feed before yielding" do
+      buffer = IO::Memory.new
+      Compress::Gzip::Writer.open(buffer, &.print("cve,epss\nCVE-1,0.4\nCVE-2,0.1\nCVE-3,0.4\n"))
+      buffer.rewind
+      scores = [] of EPSS::Score
+      EPSS::CSV.each_score(buffer) { |s| scores << s }
+
+      scores.map(&.percentile).should eq([1.0, 1.0 / 3, 1.0])
+      EPSS::Score.from_json(scores[1].to_json).should eq(scores[1])
+      buffer.closed?.should be_false
+    end
+
     it "streams without buffering" do
       csv = <<-CSV
         #model_version:v2025.03.14,score_date:2026-05-18T00:00:00+0000

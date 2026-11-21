@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Support FIRST's count-only `limit: 0` queries and enforce the 10,000-row
+  single-request cap. Paginated iteration supports larger total budgets.
+- Add `Client#fetch_raw` for partial field projections and alternate
+  response formats, and `Query#with_callback` for JSONP requests.
+- Read the full EPSS CSV archive from 2021-04-14 onward. For two-column
+  historical files, derive percentile ranks from the file's population.
+
 ### Breaking
 
 - `Client#fetch` (and so `#score`, `#scores`, `#each_score`,
@@ -15,15 +24,17 @@
 - `CSV.parse` / `CSV.each_score` take an optional `date:` fallback that
   is stamped onto rows when the feed has no `score_date` (feeds before
   2022-02-04 have no `#` metadata line). `Client#fetch_feed(date)` passes
-  the requested day, so 2021-09-01..2022-02-03 feeds no longer yield
-  `date = nil`. (Earlier feeds have no `percentile` column and still
-  raise `ParseError`.)
+  the requested day, so older feeds no longer yield `date = nil`.
+- `EPSS.today_feed` and the no-date forms of `CSV.fetch` and
+  `Client#fetch_feed` use FIRST's stable URL for the latest publication.
 - `Response#to_json` writes time-series pages nested the way the API
   does, so `Response.from_json(resp.to_json)` keeps `row_count` and
   `more?`, not just the scores.
 
 ### Fixed
 
+- Preserve historical CSV percentile precision through JSON round trips.
+- Restore response version and access from headers with `envelope=false`.
 - `Response.new` without `row_count:` compiles again; it defaults to
   `scores.size` as documented.
 - `Response#more?` no longer raises `OverflowError` when a payload's

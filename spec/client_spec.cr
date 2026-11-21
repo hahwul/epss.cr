@@ -98,13 +98,37 @@ describe EPSS::Client do
     # `total == rows`, hiding every later page.
     it "reads total/offset/limit from headers when envelope=false" do
       body = %([{"cve":"CVE-1","epss":"0.1","percentile":"0.5","date":"2026-11-10"},{"cve":"CVE-2","epss":"0.1","percentile":"0.5","date":"2026-11-10"}])
-      headers = HTTP::Headers{"X-Total" => "402773", "X-Offset" => "10", "X-Limit" => "2"}
+      headers = HTTP::Headers{
+        "X-Total" => "402773", "X-Offset" => "10", "X-Limit" => "2",
+        "X-Version" => "1.1", "X-Access" => "private, no-cache",
+      }
       stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
         HTTP::Client::Response.new(200, body: body, headers: headers)
       }
       resp = EPSS::Client.new(transport: stub).fetch(EPSS::Query.new(offset: 10, limit: 2, envelope: false))
       {resp.total, resp.offset, resp.limit, resp.size}.should eq({402773, 10, 2, 2})
+      {resp.version, resp.access}.should eq({"1.1", "private, no-cache"})
       resp.more?.should be_true
+    end
+
+    it "returns the match count without rows for limit zero" do
+      stub = paging_stub(42)
+      resp = EPSS::Client.new(transport: stub).fetch(EPSS::Query.above(0.5).with_limit(0))
+
+      params = URI::Params.parse(stub.requests.first[0].query.not_nil!)
+      {params["limit"], params["epss-gt"]}.should eq({"0", "0.5"})
+      {resp.total, resp.limit, resp.row_count}.should eq({42, 0, 0})
+      resp.scores.should be_empty
+      resp.more?.should be_false
+    end
+
+    it "retains the requested limit when a bare count response lacks X-Limit" do
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        HTTP::Client::Response.new(200, body: "[]", headers: HTTP::Headers{"X-Total" => "42"})
+      }
+      resp = EPSS::Client.new(transport: stub).fetch(EPSS::Query.new(limit: 0, envelope: false))
+      {resp.total, resp.limit, resp.row_count}.should eq({42, 0, 0})
+      resp.more?.should be_false
     end
 
     it "honors Retry-After header (seconds) on 429" do
@@ -316,6 +340,41 @@ describe EPSS::Client do
     end
   end
 
+  describe "#fetch_raw" do
+    it "returns arbitrary projections with the original body and headers" do
+      body = %([{"cve":"CVE-1"}])
+      stub = StubTransport.new ->(_uri : URI, _headers : HTTP::Headers) {
+        HTTP::Client::Response.new(200, body: body, headers: HTTP::Headers{"X-Total" => "402773"})
+      }
+      query = EPSS::Query.new(limit: 1, envelope: false).with_fields("cve")
+      response = EPSS::Client.new(transport: stub).fetch_raw(query)
+
+      response.body.should eq(body)
+      response.headers["X-Total"].should eq("402773")
+      URI::Params.parse(stub.requests.first[0].query.not_nil!)["fields"].should eq("cve")
+    end
+
+    it "honors a requested output media type" do
+      stub = StubTransport.from_body("cve\nCVE-1\n")
+      query = EPSS::Query.new(limit: 1).with_fields("cve")
+      response = EPSS::Client.new(transport: stub).fetch_raw(query, accept: "text/csv")
+
+      stub.requests.first[1]["Accept"].should eq("text/csv")
+      response.body.should eq("cve\nCVE-1\n")
+    end
+
+    it "accepts the single-page maximum and rejects a larger request" do
+      stub = StubTransport.from_body("[]")
+      client = EPSS::Client.new(transport: stub)
+      client.fetch_raw(EPSS::Query.new(limit: 10_000))
+      expect_raises(EPSS::ParseError, /10000/) do
+        client.fetch(EPSS::Query.new(limit: 10_001))
+      end
+      stub.requests.size.should eq(1)
+      URI::Params.parse(stub.requests.first[0].query.not_nil!)["limit"].should eq("10000")
+    end
+  end
+
   describe "#time_series" do
     it "flattens the nested time-series array into one Score per day" do
       payload = <<-JSON
@@ -399,6 +458,21 @@ describe EPSS::Client do
       limits.should eq(["1000", "1000", "500"])
     end
 
+    it "caps individual pages while honoring a total row budget above 10000" do
+      stub = paging_stub(11_000)
+      client = EPSS::Client.new(transport: stub)
+      client.all_scores(EPSS::Query.new(limit: 10_001), page_size: 25_000).size.should eq(10_001)
+      params = stub.requests.map { |(uri, _)| URI::Params.parse(uri.query.not_nil!) }
+      params.map { |p| {p["offset"], p["limit"]} }.should eq([{"0", "10000"}, {"10000", "1"}])
+    end
+
+    it "makes no paginated requests when the row budget is zero" do
+      stub = paging_stub(42)
+      client = EPSS::Client.new(transport: stub)
+      client.all_scores(EPSS::Query.new(limit: 0)).should be_empty
+      stub.requests.should be_empty
+    end
+
     # Regression: with `envelope=false` FIRST moves total/offset into headers,
     # so the bare array looked like a single complete page and iteration
     # stopped after `page_size` rows.
@@ -428,6 +502,29 @@ describe EPSS::Client do
   end
 
   describe "#fetch_feed" do
+    it "follows the current-feed redirect and uses the publication day" do
+      body = "#model_version:v2026.06.15,score_date:2026-06-16T12:00:00Z\ncve,epss,percentile\nCVE-1,0.1,0.5\n"
+      stub = StubTransport.from_queue([
+        HTTP::Client::Response.new(302, headers: HTTP::Headers{"Location" => "/epss_scores-2026-06-16.csv.gz"}),
+        HTTP::Client::Response.new(200, body: body),
+      ])
+      feed = EPSS::Client.new(transport: stub).fetch_feed
+
+      stub.requests.map { |(uri, _)| uri.path }.should eq([
+        "/epss_scores-current.csv.gz", "/epss_scores-2026-06-16.csv.gz",
+      ])
+      feed.scores.first.date.should eq(Time.utc(2026, 6, 16))
+    end
+
+    it "downloads and ranks the earliest two-column feed" do
+      stub = StubTransport.from_body("cve,epss\nCVE-2020-5902,0.65117\nCVE-2020-1472,0.2\n")
+      feed = EPSS::Client.new(transport: stub).fetch_feed(Time.utc(2021, 4, 14))
+
+      stub.requests.first[0].path.should eq("/epss_scores-2021-04-14.csv.gz")
+      feed.scores.map(&.percentile).should eq([1.0, 0.5])
+      feed.scores.first.date.should eq(Time.utc(2021, 4, 14))
+    end
+
     # Feeds before 2022-02-04 start straight at the header row.
     it "stamps the requested date on a feed without a metadata line" do
       client = EPSS::Client.new(transport: StubTransport.from_body("cve,epss,percentile\nCVE-2021-4034,0.04225,0.74118\n"))
